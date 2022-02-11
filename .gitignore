@@ -1,0 +1,9 @@
+/target
+/pkg
+/output
+/resources/sound
+Cargo.lock
+.idea
+.DS_Store
+neurotask.iml
+/*.zip
