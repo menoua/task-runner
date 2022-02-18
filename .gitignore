@@ -1,7 +1,7 @@
 /target
 /pkg
 /output
-/resources/sound
+/examples
 Cargo.lock
 .idea
 .DS_Store

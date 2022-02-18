@@ -1,138 +1,136 @@
-use serde::Serialize;
-use std::fmt::Debug;
+use iced::{Align, Column, Length, Row, Text, button, Radio};
+use iced_native::Space;
+use serde::{Serialize, Deserialize};
+use crate::comm::{Code, Message, Value};
+use crate::style;
+use crate::style::{button, TEXT_LARGE};
 
-pub use standard::{AudioConfig, InputConfig};
-pub use standard::{StdConfig, StdConfigItem};
-
-pub trait Config: Debug + Default + Clone + Serialize + Send {
-    type Item: Debug + Clone + Send + PartialEq;
-
-    fn keys() -> Vec<&'static str>;
-    fn values(key: &str) -> Vec<(&'static str, Self::Item)>;
-    fn description(key: &str) -> &'static str;
-
-    fn get(&self, key: &str) -> Self::Item;
-    fn update(&mut self, key: &str, value: Self::Item);
+#[derive(Debug, Default, Deserialize, Serialize)]
+pub struct Config {
+    audio: (AudioConfig, bool),
+    #[serde(skip)]
+    handles: [button::State; 3],
 }
 
-mod standard {
-    use super::*;
-    use serde::{Deserialize, Serialize};
-
-    #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-    pub enum InputConfig {
-        External,
-        Keyboard,
+impl Config {
+    pub fn is_static(&self) -> bool {
+        self.audio.1
     }
 
-    impl Default for InputConfig {
-        fn default() -> Self {
-            InputConfig::External
+    pub fn view(&mut self) -> Column<Message> {
+        let mut content = Column::new()
+            .width(Length::Fill)
+            .spacing(60)
+            .align_items(Align::Start);
+
+        if !self.audio.1 {
+            content = content.push(self.audio.0.view());
         }
+
+        let [h_cancel, h_revert, h_start] = &mut self.handles;
+        let e_cancel = button(h_cancel, "Cancel", TEXT_LARGE)
+            .on_press(Message::UIEvent(0x01, Value::Null))
+            .style(style::Button::Secondary)
+            .width(Length::Units(200))
+            .padding(15);
+        let e_revert = button(h_revert, "Revert", TEXT_LARGE)
+            .on_press(Message::UIEvent(0x02, Value::Null))
+            .style(style::Button::Destructive)
+            .width(Length::Units(200))
+            .padding(15);
+        let e_start = button(h_start, "Start!", TEXT_LARGE)
+            .on_press(Message::UIEvent(0x03, Value::Null))
+            .style(style::Button::Primary)
+            .width(Length::Units(200))
+            .padding(15);
+
+        content.push(Row::new()
+            .push(e_cancel)
+            .push(Space::with_width(Length::Fill))
+            .push(e_revert)
+            .push(Space::with_width(Length::Fill))
+            .push(e_start))
     }
 
-    #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-    pub enum AudioConfig {
-        MonoAudioAndTrigger,
-        StereoAudio,
+    pub fn reset(&mut self) {
+        self.audio.0 = AudioConfig::default();
     }
 
-    impl Default for AudioConfig {
-        fn default() -> Self {
-            AudioConfig::MonoAudioAndTrigger
-        }
-    }
-
-    #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-    pub enum StdConfigItem {
-        InputConfig(InputConfig),
-        AudioConfig(AudioConfig),
-    }
-
-    #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-    pub struct StdConfig {
-        input_cfg: InputConfig,
-        audio_cfg: AudioConfig,
-    }
-
-    impl Default for StdConfig {
-        fn default() -> Self {
-            StdConfig {
-                input_cfg: InputConfig::default(),
-                audio_cfg: AudioConfig::default(),
+    pub fn update(&mut self, code: Code, value: Value) {
+        match (code, value) {
+            (0x04, Value::Integer(i)) => {
+                self.audio.0 = match i {
+                    1 => AudioConfig::MonoAndTrigger,
+                    2 => AudioConfig::Stereo,
+                    _ => panic!("Invalid value for audio config")
+                };
             }
+
+            _ => panic!("Invalid configuration code or value type")
         }
     }
 
-    impl Config for StdConfig {
-        type Item = StdConfigItem;
-
-        fn keys() -> Vec<&'static str> {
-            vec!["input_cfg", "audio_cfg"]
+    pub fn query(&self, key: &str) -> String {
+        match key {
+            "audio" => self.audio.0.into(),
+            _ => panic!("Invalid config query")
         }
+    }
+}
 
-        fn values(key: &str) -> Vec<(&'static str, Self::Item)> {
-            match key {
-                "input_cfg" => vec![
-                    (
-                        "External device",
-                        StdConfigItem::InputConfig(InputConfig::External),
-                    ),
-                    (
-                        "System keyboard",
-                        StdConfigItem::InputConfig(InputConfig::Keyboard),
-                    ),
-                ],
+#[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Copy, Clone)]
+pub enum AudioConfig {
+    MonoAndTrigger,
+    Stereo,
+}
 
-                "audio_cfg" => vec![
-                    (
-                        "L: Audio / R: Trigger",
-                        StdConfigItem::AudioConfig(AudioConfig::MonoAudioAndTrigger),
-                    ),
-                    (
-                        "Stereo audio",
-                        StdConfigItem::AudioConfig(AudioConfig::StereoAudio),
-                    ),
-                ],
+impl Default for AudioConfig {
+    fn default() -> Self { AudioConfig::MonoAndTrigger }
+}
 
-                _ => panic!("`{}` not found in configuration", key),
-            }
+impl AudioConfig {
+    pub fn view(&mut self) -> Column<Message> {
+        let e_mono_t = Radio::new(
+            AudioConfig::MonoAndTrigger,
+            "L: Audio / R: Trigger",
+            Some(self.clone()),
+            |_| Message::UIEvent(0x04, Value::Integer(1)))
+            .text_size(TEXT_LARGE);
+        let e_stereo = Radio::new(
+            AudioConfig::Stereo,
+            "Stereo audio",
+            Some(self.clone()),
+            |_| Message::UIEvent(0x04, Value::Integer(2)))
+            .text_size(TEXT_LARGE);
+
+        Column::new()
+            .align_items(Align::Start)
+            .spacing(25)
+            .push(Text::new("Output audio channel configuration:")
+                      .size(TEXT_LARGE))
+            .push(Row::new()
+                .spacing(40)
+                .push(e_mono_t)
+                // .push(Space::with_width(Length::Fill))
+                .push(e_stereo))
+    }
+}
+
+impl From<String> for AudioConfig {
+    fn from(value: String) -> Self {
+        match value.as_str() {
+            "MonoAndTrigger" => AudioConfig::MonoAndTrigger,
+            "Stereo" => AudioConfig::Stereo,
+            _ => panic!("Unexpected value"),
         }
+    }
+}
 
-        fn description(key: &str) -> &'static str {
-            match key {
-                "input_cfg" => "Input (reaction) device configuration",
-                "audio_cfg" => "Output audio channel configuration",
-                _ => panic!("`{}` not found in configuration", key),
-            }
-        }
-
-        fn get(&self, key: &str) -> Self::Item {
-            match key {
-                "input_cfg" => StdConfigItem::InputConfig(self.input_cfg.clone()),
-                "audio_cfg" => StdConfigItem::AudioConfig(self.audio_cfg.clone()),
-                _ => panic!("`{}` not found in configuration", key),
-            }
-        }
-
-        fn update(&mut self, key: &str, value: Self::Item) {
-            match key {
-                "input_cfg" => match value {
-                    StdConfigItem::InputConfig(cfg) => {
-                        self.input_cfg = cfg;
-                    }
-                    _ => panic!("bad value for config `{}`", key),
-                },
-
-                "audio_cfg" => match value {
-                    StdConfigItem::AudioConfig(cfg) => {
-                        self.audio_cfg = cfg;
-                    }
-                    _ => panic!("bad value for config `{}`", key),
-                },
-
-                _ => panic!("`{}` not found in configuration", key),
-            }
-        }
+impl Into<String> for AudioConfig {
+    fn into(self) -> String {
+        String::from(match self {
+            AudioConfig::MonoAndTrigger => "MonoAndTrigger",
+            AudioConfig::Stereo => "Stereo",
+        })
     }
 }

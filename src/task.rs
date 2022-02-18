@@ -1,602 +1,279 @@
-use iced::{
-    button, Align, Application, Clipboard, Column, Command, Container, Element,
-    HorizontalAlignment, Length, Row, Space, Subscription, Text,
-};
-use iced_native::keyboard::KeyCode;
-use iced_native::subscription;
 use std::env;
-use std::time::{Duration, Instant};
+use std::fs::File;
+use std::io::Read;
+use std::path::PathBuf;
+use std::time::Duration;
+use iced::{Column, Command, Element, Length, Row, Text, button, Align};
+use iced_native::Space;
+use serde::{Serialize, Deserialize};
 
 use crate::block::Block;
+use crate::comm::{Message, Receiver, Value};
 use crate::config::Config;
-use crate::error::Error;
-use crate::logger::{Event, Logger, Reaction, Response};
-use crate::question::Question;
-use crate::style::{self, button, TEXT_LARGE, TEXT_NORMAL, TEXT_XLARGE};
+use crate::dispatch::Dispatcher;
+use crate::style::{self, button, TEXT_LARGE, TEXT_XLARGE};
+use crate::util::timestamp;
+use crate::window::Window;
 
-use state::State;
-
-pub struct Task<T>
-where
-    T: Block, // + 'static
-{
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct Task {
     title: String,
     version: String,
-    config: T::Config,
-    blocks: Vec<T>,
-    progress: Vec<bool>,
-    state: State<T>,
-    logger: Logger<T>,
+    #[serde(default, skip_serializing)]
     description: String,
+    #[serde(default)]
+    configuration: Config,
+    #[serde(default)]
+    blocks: Vec<Block>,
+    #[serde(skip)]
+    progress: Vec<bool>,
+    #[serde(skip)]
+    dispatcher: Option<Dispatcher>,
+    #[serde(skip)]
+    state: State,
+    #[serde(skip)]
+    root_dir: String,
+    #[serde(skip)]
+    log_dir: String,
+    #[serde(default)]
+    window: Window,
 }
 
-mod state {
-    use super::*;
-    use crate::block::Communication;
-    use std::fmt::Formatter;
-
-    // #[derive(Debug)]
-    pub enum State<T: Block> {
-        Startup {
-            configure: button::State,
-            start: button::State,
-        },
-
-        Configure {
-            options: T::Config,
-            handles: Vec<Vec<button::State>>,
-            // elements: Vec<Vec<Button<'a, Message<T>>>>,
-            cancel: button::State,
-            revert: button::State,
-            apply: button::State,
-        },
-
-        Selection {
-            handles: Vec<button::State>,
-            // elements: Vec<Button<'a, Message<T>>>,
-        },
-
-        Countdown {
-            block: usize,
-            target: Instant,
-            remaining: Duration,
-            cancel: button::State,
-        },
-
-        Active {
-            block: usize,
-            last_esc: Instant,
-            comm: Communication,
-        },
-
-        Query {
-            block: usize,
-            current: T::Question,
-            queue: Vec<T::Question>,
-            handles: Vec<button::State>,
-            submit: button::State,
-        },
-    }
-
-    impl<T: Block> std::fmt::Display for State<T> {
-        fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-            match self {
-                State::Startup { .. } => write!(f, "Startup"),
-                State::Configure { .. } => write!(f, "Configure"),
-                State::Selection { .. } => write!(f, "Selection"),
-                State::Countdown { block, .. } => write!(f, "Countdown (block={})", block),
-                State::Active { block, .. } => write!(f, "Active (block={})", block),
-                State::Query { block, .. } => write!(f, "Query (block={})", block),
-            }
-        }
-    }
-
-    pub fn startup<T: Block>() -> State<T> {
-        State::Startup {
-            configure: button::State::new(),
-            start: button::State::new(),
-        }
-    }
-
-    pub fn configure<T: Block>(config: &T::Config) -> State<T> {
-        let options = config.clone();
-
-        let handles: Vec<_> = T::Config::keys()
-            .into_iter()
-            .map(|k| {
-                T::Config::values(k)
-                    .into_iter()
-                    .map(|_| button::State::new())
-                    .collect()
-            })
-            .collect();
-
-        State::Configure {
-            options,
-            handles,
-            cancel: button::State::new(),
-            revert: button::State::new(),
-            apply: button::State::new(),
-        }
-    }
-
-    pub fn selection<T: Block>(blocks: &[T]) -> State<T> {
-        let handles: Vec<_> = blocks.into_iter().map(|_| button::State::new()).collect();
-
-        State::Selection {
-            handles,
-            // elements,
-        }
-    }
-
-    pub fn countdown<'a, T: Block>(block: usize) -> State<T> {
-        State::Countdown {
-            block,
-            target: Instant::now() + Duration::from_secs(5),
-            remaining: Duration::from_secs(5),
-            cancel: button::State::new(),
-        }
-    }
-
-    pub fn active<'a, T: Block>(block: usize) -> (State<T>, Communication) {
-        let (comm_task, comm_block) = Communication::two_way();
-
-        (
-            State::Active {
-                block,
-                last_esc: Instant::now() - Duration::from_secs(10),
-                comm: comm_task,
-            },
-            comm_block,
-        )
-    }
-
-    pub fn query<'a, T: Block>(block: usize, mut questionnaire: Vec<T::Question>) -> State<T> {
-        State::Query {
-            block,
-            current: questionnaire.remove(0),
-            queue: questionnaire,
-            handles: vec![],
-            submit: button::State::new(),
-        }
-    }
-}
+// #[derive(Debug, Deserialize)]
+// pub struct Window {
+//     size: (u16, u16),
+//     font_scale: f32
+// }
 
 #[derive(Debug, Clone)]
-pub enum Message<T: Block> {
-    ChangeConfig,
-    CancelConfig,
-    RevertConfig,
-    UpdateConfig(String, <T::Config as Config>::Item),
-    StartTask,
-    StartBlock(usize),
-    AdvanceTimer(Instant),
-    StopTimer,
-    Reaction(KeyCode),
-    BlockInterrupt,
-    BlockFinished(Result<(), Error>),
-    UpdateResponse(T::Answer),
-    SubmitResponse(Result<(), Error>),
+enum State {
+    Startup {
+        handles: [button::State; 2]
+    },
+    Configure,
+    Selection {
+        handles: [button::State; 64],
+    },
+    Starting {
+        wait_for: u16,
+    },
+    Started,
 }
 
-impl<T> Task<T>
-where
-    T: Block,
-{
-    pub fn new() -> Self {
-        Task {
-            title: String::from("Default"),
-            version: String::from("0.0.0"),
-            config: T::Config::default(),
-            blocks: vec![],
-            progress: vec![],
-            state: state::startup(),
-            logger: Logger::new(),
-            description: String::from("Default"),
+impl Default for State {
+    fn default() -> Self {
+        State::Startup {
+            handles: [button::State::new(); 2]
         }
     }
-
-    pub fn set_title(mut self, title: &str) -> Self {
-        self.title = String::from(title);
-        self
-    }
-
-    pub fn set_version(mut self, version: &str) -> Self {
-        self.version = String::from(version);
-        self
-    }
-
-    pub fn set_config(mut self, config: T::Config) -> Self {
-        self.config = config;
-        self
-    }
-
-    pub fn set_blocks(mut self, blocks: Vec<T>) -> Self {
-        self.blocks = blocks;
-        self.progress = vec![false; self.blocks.len()];
-        self
-    }
-
-    pub fn set_description(mut self, description: &str) -> Self {
-        self.description = String::from(description);
-        self
-    }
 }
 
-pub type Builder<T> = Option<Box<dyn FnOnce() -> Task<T>>>;
+impl Task {
+    pub fn new(task_dir: PathBuf) -> Self {
+        let file = task_dir.join("task.yml");
+        let file = File::open(file)
+            .expect("Failed to open YAML file");
+        let mut task: Task = serde_yaml::from_reader(file)
+            .expect("Failed to read YAML file.");
 
-impl<T: Block> Application for Task<T> {
-    type Executor = iced::executor::Default;
-    type Message = Message<T>;
-    type Flags = Builder<T>;
+        if task.description.starts_with("~") {
+            let file = task_dir.join(&task.description[1..]);
+            let mut file = File::open(file)
+                .expect("Failed to open task description file");
+            task.description = String::new();
+            file.read_to_string(&mut task.description)
+                .expect("Failed to read task description file");
+        }
 
-    fn new(flags: Self::Flags) -> (Task<T>, Command<Self::Message>) {
-        let task = match flags {
-            Some(builder) => builder(),
-            None => Task::new(),
-        };
+        let name = format!("session-{}", timestamp());
+        task.log_dir = task_dir.join("output").join(name).to_str().unwrap().to_string();
+        std::fs::create_dir_all(&task.log_dir)
+            .expect("Failed to create output directory for task");
 
-        println!(
-            ">> {} | v{} | rust-{}",
-            task.title,
-            task.version,
-            env::consts::OS
-        );
-        (task, Command::none())
+        for (i, block) in task.blocks.iter_mut().enumerate() {
+            block.init(i+1, &task_dir);
+        }
+        task.progress = vec![false; task.blocks.len()];
+
+        task.root_dir = task_dir.to_str().unwrap().to_string();
+        task
     }
 
-    fn title(&self) -> String {
-        let subtitle = match self.state {
-            State::Startup { .. } => "Welcome",
-            State::Configure { .. } => "Configuration",
-            State::Selection { .. } => "Block selection",
-            State::Countdown { .. } => "Block countdown",
-            State::Active { .. } => "Block running",
-            State::Query { .. } => "Question",
-        };
+    pub fn update(&mut self, message: Message) -> Command<Message> {
+        let state = &mut self.state;
+        let is_active = self.dispatcher.is_some()
+            && self.dispatcher.as_ref().unwrap().is_active();
 
-        format!("{} (v{}) - {}", self.title, self.version, subtitle)
-    }
-
-    fn update(&mut self, message: Self::Message, _: &mut Clipboard) -> Command<Self::Message> {
         match message {
-            Message::ChangeConfig => {
-                self.state = state::configure(&self.config);
-                Command::none()
-            }
-
-            Message::CancelConfig => {
-                self.state = state::startup();
-                Command::none()
-            }
-
-            Message::RevertConfig => {
-                if let State::Configure { options, .. } = &mut self.state {
-                    *options = self.config.clone();
+            Message::SetComms(writer) => {
+                if self.has_dispatcher() {
+                    panic!("Tried to set up two dispatchers simultaneously");
                 }
+                self.dispatcher = Some(Dispatcher::new(writer));
                 Command::none()
             }
-
-            Message::UpdateConfig(key, value) => {
-                if let State::Configure { options, .. } = &mut self.state {
-                    options.update(&key, value);
-                }
-                Command::none()
-            }
-
-            Message::StartTask => {
-                if let State::Configure { options, .. } = &self.state {
-                    self.config = options.clone();
-                }
-
-                self.logger.log_event(Event::Init {
-                    task: self.title.clone(),
-                    version: self.version.clone(),
-                    sess_id: self.logger.sess_id(),
-                    config: self.config.clone(),
-                });
-
-                self.state = state::selection(&self.blocks);
-                Command::none()
-            }
-
-            Message::StartBlock(block) => {
-                if let State::Selection { .. } = self.state {
-                    self.logger.log_event(Event::BlockStart {
-                        id: self.blocks[block].id(),
+            Message::Query(from, key) => {
+                let response = Message::QueryResponse(
+                    from,
+                    match key.as_str() {
+                        "task_dir" => {
+                            self.root_dir.clone()
+                        },
+                        string if string.starts_with("config::") => {
+                            self.configuration.query(&key[8..])
+                        },
+                        _ => panic!("Invalid query key: {}", key),
                     });
-
-                    self.state = state::countdown(block);
-                }
-                Command::none()
+                self.dispatcher.as_mut().unwrap().update(response)
             }
-
-            Message::AdvanceTimer(now) => {
-                let mut timeout = false;
-                let mut block_num = 0 as usize;
-
-                if let State::Countdown {
-                    block,
-                    target,
-                    remaining,
-                    ..
-                } = &mut self.state
-                {
-                    if now < *target {
-                        *remaining = *target - now;
-                    } else {
-                        timeout = true;
-                        block_num = *block;
+            Message::UIEvent(code, value) => {
+                match (state, code, value.clone()) {
+                    (State::Startup { .. }, 0x01, _) => {
+                        self.state = State::Configure;
+                        Command::none()
                     }
+                    (State::Startup { .. }, 0x02, _) => {
+                        self.state = State::Selection {
+                            handles: [button::State::new(); 64],
+                        };
+                        // serde_yaml::to_writer(self.logger.config_writer(), &self);
+                        Command::none()
+                    }
+                    (State::Configure, 0x01, _) => {
+                        self.configuration.reset();
+                        self.state = State::Startup {
+                            handles: [button::State::new(); 2]
+                        };
+                        Command::none()
+                    }
+                    (State::Configure, 0x02, _) => {
+                        self.configuration.reset();
+                        Command::none()
+                    }
+                    (State::Configure, 0x03, _) => {
+                        self.state = State::Selection {
+                            handles: [button::State::new(); 64],
+                        };
+                        Command::none()
+                    }
+                    (State::Configure, _, _) => {
+                        self.configuration.update(code, value);
+                        Command::none()
+                    }
+                    (State::Selection { .. }, i, Value::Null) => {
+                        self.state = State::Starting {
+                            wait_for: 3
+                        };
+                        Command::perform(async {
+                            std::thread::sleep(Duration::from_secs(1));
+                        }, move |()| Message::UIEvent(i, Value::Integer(2)))
+                    }
+                    (State::Starting { .. }, i, Value::Integer(0)) => {
+                        self.state = State::Started;
+                        self.execute(i as usize)
+                    }
+                    (State::Starting { wait_for, ..}, i, Value::Integer(t)) => {
+                        *wait_for = t.clone() as u16;
+                        Command::perform(async {
+                            std::thread::sleep(Duration::from_secs(1));
+                        }, move |()| Message::UIEvent(i, Value::Integer(t - 1)))
+                    }
+                    (State::Started { .. }, _, _) if is_active => {
+                        self.dispatcher.as_mut().unwrap()
+                            .update(Message::UIEvent(code, value))
+                    }
+                    _ => Command::none(),
                 }
+            }
+            Message::Code(..) |
+            Message::Value(..) |
+            Message::KeyPress(..) |
+            Message::ActionComplete(..) => {
+                self.dispatcher.as_mut().unwrap().update(message)
+            }
+            Message::Interrupt => {
+                self.state = State::Selection {
+                    handles: [button::State::new(); 64],
+                };
+                self.dispatcher.as_mut().unwrap().update(message)
+            }
+            Message::BlockComplete => {
+                self.state = State::Selection {
+                    handles: [button::State::new(); 64],
+                };
+                self.progress[self.dispatcher.as_ref().unwrap().block_id()-1] = true;
+                self.dispatcher.as_mut().unwrap().update(message)
+            }
+            _ => {
+                panic!("Asked to relay invalid message type");
+            }
+        }
+    }
 
-                if timeout {
-                    let (state, comm) = state::active(block_num);
-                    self.state = state;
+    pub fn has_dispatcher(&self) -> bool {
+        self.dispatcher.is_some()
+    }
 
-                    let id = String::from(self.blocks[block_num].id());
-                    let config = self.config.clone();
-                    Command::perform(
-                        async move { T::run(id, config, comm) },
-                        Message::BlockFinished,
-                    )
+    pub fn is_active(&self) -> bool {
+        self.dispatcher.is_some() && self.dispatcher.as_ref().unwrap().is_active()
+    }
+
+    pub fn execute<'b>(&mut self, block: usize) -> Command<Message> {
+        if block == 0 {
+            panic!("Block indexing starts from 1")
+        }
+        if self.dispatcher.as_ref().unwrap().is_active() {
+            panic!("Tried to start a new block when another one is still running");
+        }
+        let block = self.blocks[block-1].clone().with_log_dir(&self.log_dir);
+        self.dispatcher.as_mut().unwrap().init(block)
+    }
+
+    pub fn view(&mut self) -> Column<Message> {
+        let state = &mut self.state;
+        let is_active = self.dispatcher.is_some()
+            && self.dispatcher.as_ref().unwrap().is_active();
+
+        match state {
+            State::Startup { handles: [h_config, h_start] } => {
+                let e_config: Element<Message> = if self.configuration.is_static() {
+                    Space::with_width(Length::Units(200))
+                        .into()
                 } else {
-                    Command::none()
-                }
-            }
+                    button(h_start, "Configure", TEXT_LARGE)
+                        .on_press(Message::UIEvent(0x01, Value::Null))
+                        .style(style::Button::Secondary)
+                        .width(Length::Units(200))
+                        .padding(15)
+                        .into()
+                };
 
-            Message::StopTimer => {
-                if let State::Countdown { .. } = self.state {
-                    self.state = state::selection(&self.blocks);
-                }
-                Command::none()
-            }
+                let e_start = button(h_config, "Start!", TEXT_LARGE)
+                    .on_press(Message::UIEvent(0x02, Value::Null))
+                    .style(style::Button::Primary)
+                    .width(Length::Units(200))
+                    .padding(15);
 
-            Message::Reaction(key_code) => {
-                if let State::Active { block, .. } = self.state {
-                    self.logger
-                        .log_reaction(Reaction::new(self.blocks[block].id(), key_code));
-                    eprintln!("Key press logged.")
-                }
-                Command::none()
-            }
-
-            Message::BlockInterrupt => {
-                if let State::Active {
-                    block,
-                    last_esc,
-                    comm,
-                    ..
-                } = &mut self.state
-                {
-                    let now = Instant::now();
-
-                    if now.duration_since(*last_esc) < Duration::from_millis(250) {
-                        comm.send().unwrap();
-                        self.logger.log_event(Event::BlockEnd {
-                            id: self.blocks[*block].id(),
-                            success: false,
-                        });
-
-                        eprintln!("Block interrupted!");
-                        self.state = state::selection(&self.blocks);
-                    } else {
-                        *last_esc = now;
-                    }
-                }
-                Command::none()
-            }
-
-            Message::BlockFinished(Ok(_)) => {
-                if let State::Active { block, .. } = self.state {
-                    self.logger.log_event(Event::BlockEnd {
-                        id: self.blocks[block].id(),
-                        success: true,
-                    });
-
-                    let id = self.blocks[block].id();
-                    let questionnaire = T::questionnaire(&id, &self.config);
-
-                    if questionnaire.len() > 0 {
-                        self.state = state::query(block, questionnaire);
-                    } else {
-                        self.state = state::selection(&self.blocks);
-                    }
-                }
-                Command::none()
-            }
-
-            Message::BlockFinished(Err(_)) => {
-                if let State::Active { block, .. } = self.state {
-                    self.logger.log_event(Event::BlockEnd {
-                        id: self.blocks[block].id(),
-                        success: false,
-                    });
-
-                    eprintln!("Block interrupted!");
-                    self.state = state::selection(&self.blocks);
-                }
-                Command::none()
-            }
-
-            Message::UpdateResponse(value) => {
-                if let State::Query { current, .. } = &mut self.state {
-                    current.update(value)
-                }
-                Command::none()
-            }
-
-            Message::SubmitResponse(Ok(_)) => {
-                if let State::Query {
-                    block,
-                    current,
-                    queue,
-                    ..
-                } = &mut self.state
-                {
-                    self.logger
-                        .log_response(Response::new(self.blocks[*block].id(), current.summary()));
-
-                    if queue.len() > 0 {
-                        self.state = state::query(*block, queue.clone());
-                    } else {
-                        self.state = state::selection(&self.blocks);
-                    }
-                }
-                Command::none()
-            }
-
-            Message::SubmitResponse(Err(_)) => {
-                if let State::Query { .. } = self.state {
-                    // progress[*block] = true;
-                    self.state = state::selection(&self.blocks);
-                }
-                Command::none()
-            }
-        }
-    }
-
-    fn subscription(&self) -> Subscription<Message<T>> {
-        use iced_native::keyboard::Event::KeyPressed;
-        use iced_native::Event::Keyboard;
-
-        match self.state {
-            State::Countdown { .. } => Subscription::batch([
-                iced::time::every(Duration::from_secs(1)).map(Message::AdvanceTimer),
-                subscription::events_with(|event, _| match event {
-                    Keyboard(keyboard_event) => match keyboard_event {
-                        KeyPressed {
-                            key_code: KeyCode::Escape,
-                            ..
-                        } => Some(Message::StopTimer),
-                        _ => None,
-                    },
-                    _ => None,
-                }),
-            ]),
-
-            State::Active { .. } => subscription::events_with(|event, _| match event {
-                Keyboard(keyboard_event) => match keyboard_event {
-                    KeyPressed {
-                        key_code: KeyCode::Escape,
-                        ..
-                    } => Some(Message::BlockInterrupt),
-                    KeyPressed { key_code, .. } => Some(Message::Reaction(key_code)),
-                    _ => None,
-                },
-                _ => None,
-            }),
-
-            _ => Subscription::none(),
-        }
-    }
-
-    fn view(&mut self) -> Element<Message<T>> {
-        let content = match &mut self.state {
-            State::Startup { configure, start } => Column::new()
-                .width(Length::Units(600))
-                .spacing(40)
-                .push(Text::new("Instructions").size(TEXT_XLARGE))
-                .push(Text::new(&self.description).size(TEXT_LARGE))
-                .push(
-                    Row::new()
-                        .push(
-                            button(configure, "Configure", TEXT_LARGE)
-                                .on_press(Message::ChangeConfig)
-                                .style(style::Button::Secondary)
-                                .width(Length::Units(200)),
-                        )
+                Column::new()
+                    .width(Length::Fill)
+                    .push(Column::new()
+                        .spacing(40)
+                        .push(Text::new("Instructions").size(TEXT_XLARGE))
+                        .push(Text::new(&self.description).size(TEXT_LARGE)))
+                    .push(Space::with_height(Length::Fill))
+                    .push(Row::new()
+                        .push(e_config)
                         .push(Space::with_width(Length::Fill))
-                        .push(
-                            button(start, "Start!", TEXT_LARGE)
-                                .on_press(Message::StartTask)
-                                .style(style::Button::Primary)
-                                .width(Length::Units(200)),
-                        ),
-                ),
+                        .push(e_start))
+                    .into()
+            }
 
-            State::Configure {
-                options,
-                handles,
-                cancel,
-                revert,
-                apply,
-                ..
-            } => {
-                let elements: Vec<Vec<_>> = T::Config::keys()
-                    .into_iter()
-                    .zip(handles)
-                    .map(|(k, hs)| {
-                        T::Config::values(k)
-                            .into_iter()
-                            .zip(hs)
-                            .map(|((l, v), h)| {
-                                button(h, l, TEXT_NORMAL)
-                                    .width(Length::Units(275))
-                                    .style(if options.get(k) == v {
-                                        style::Button::Active
-                                    } else {
-                                        style::Button::Inactive
-                                    })
-                                    .on_press(Message::UpdateConfig(String::from(k), v))
-                            })
-                            .collect()
-                    })
-                    .collect();
-
-                let mut content = Column::new()
-                    .width(Length::Units(600))
-                    .spacing(60)
-                    .align_items(Align::Start);
-
-                for (k, es) in T::Config::keys().into_iter().zip(elements) {
-                    let mut row = Row::new();
-                    for (i, e) in es.into_iter().enumerate() {
-                        if i > 0 {
-                            row = row.push(Space::with_width(Length::Fill));
-                        }
-                        row = row.push(e);
-                    }
-
-                    content = content.push(
-                        Column::new()
-                            .spacing(20)
-                            .push(
-                                Text::new(format!("{}:", T::Config::description(k)))
-                                    .size(TEXT_NORMAL),
-                            )
-                            .push(row),
-                    );
-                }
-
-                content.push(
-                    Row::new()
-                        .push(
-                            button(cancel, "Cancel", TEXT_LARGE)
-                                .on_press(Message::CancelConfig)
-                                .style(style::Button::Secondary)
-                                .width(Length::Units(175)),
-                        )
-                        .push(Space::with_width(Length::Fill))
-                        .push(
-                            button(revert, "Revert", TEXT_LARGE)
-                                .on_press(Message::RevertConfig)
-                                .style(style::Button::Destructive)
-                                .width(Length::Units(175)),
-                        )
-                        .push(Space::with_width(Length::Fill))
-                        .push(
-                            button(apply, "Start!", TEXT_LARGE)
-                                .on_press(Message::StartTask)
-                                .style(style::Button::Primary)
-                                .width(Length::Units(175)),
-                        ),
-                )
+            State::Configure => {
+                self.configuration.view()
             }
 
             State::Selection { handles, .. } => {
-                let mut controls = Row::new();
-
                 let elements: Vec<_> = self
                     .blocks
                     .iter()
@@ -605,84 +282,63 @@ impl<T: Block> Application for Task<T> {
                     .zip(handles)
                     .map(|(((i, block), is_done), h)| {
                         button(h, &block.title(), TEXT_XLARGE)
-                            .on_press(Message::StartBlock(i))
-                            .style(if *is_done {
-                                style::Button::Done
-                            } else {
-                                style::Button::Todo
-                            })
-                            .width(Length::Units(175))
-                            .padding(20)
+                            .on_press(Message::UIEvent((i + 1) as u16, Value::Null))
+                            .style(if *is_done { style::Button::Done } else { style::Button::Todo })
+                            .width(Length::Units(200))
+                            .padding(15)
                     })
                     .collect();
 
+                let mut rows = Column::new()
+                    .spacing(40)
+                    .align_items(Align::Center);
+                let mut controls = Row::new()
+                    .spacing(60);
                 for (i, e) in elements.into_iter().enumerate() {
-                    if i > 0 {
-                        controls = controls.push(Space::with_width(Length::Fill));
+                    if i > 0 && i % 3 == 0 {
+                        rows = rows.push(controls);
+                        controls = Row::new()
+                            .spacing(60);
                     }
                     controls = controls.push(e);
                 }
+                rows = rows.push(controls);
 
                 Column::new()
-                    .width(Length::Units(600))
-                    .spacing(40)
+                    .width(Length::Fill)
+                    .height(Length::Fill)
+                    .spacing(60)
                     .align_items(Align::Center)
+                    .push(Space::with_height(Length::Fill))
                     .push(Text::new("Choose a block to start:").size(TEXT_XLARGE))
-                    .push(controls)
+                    .push(rows)
+                    .push(Space::with_height(Length::Fill))
             }
 
-            State::Countdown {
-                block,
-                remaining,
-                cancel,
-                ..
-            } => Column::new()
-                .width(Length::Units(600))
-                .align_items(Align::Center)
-                .spacing(60)
-                .push(
-                    Text::new(format!(
-                        "Starting block in {:?} seconds...",
-                        remaining.as_secs_f32().round() as i32
-                    ))
-                    .size(TEXT_XLARGE),
-                )
-                .push(
-                    Text::new(self.blocks[*block].description())
-                        .horizontal_alignment(HorizontalAlignment::Center)
-                        .size(TEXT_XLARGE),
-                )
-                .push(
-                    button(cancel, "Cancel", TEXT_NORMAL)
-                        .on_press(Message::StopTimer)
-                        .style(style::Button::Destructive)
-                        .width(Length::Units(150)),
-                ),
+            State::Starting { wait_for, .. } => {
+                Column::new()
+                    .width(Length::Fill)
+                    .height(Length::Fill)
+                    .align_items(Align::Center)
+                    .push(Space::with_height(Length::Fill))
+                    .push(Text::new(
+                        format!("Starting block in {}...", wait_for)).size(TEXT_XLARGE))
+                    .push(Space::with_height(Length::Fill))
+            }
 
-            State::Active { block, .. } => Column::new()
-                .push(self.blocks[*block].view())
-                .width(Length::Units(600))
-                .align_items(Align::Center),
+            State::Started { .. } if is_active => {
+                self.dispatcher.as_mut().unwrap().view()
+            }
 
-            State::Query {
-                current, submit, ..
-            } => Column::new()
-                .width(Length::Units(600))
-                .spacing(60)
-                .align_items(Align::Center)
-                .push(current.view())
-                .push(
-                    button(submit, "Submit", TEXT_LARGE)
-                        .on_press(Message::SubmitResponse(Ok(())))
-                        .width(Length::Units(400)),
-                ),
-        };
+            _ => Column::new()
+        }
+    }
 
-        Container::new(content)
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .center_x()
-            .center_y()
-            .into()
+    pub fn title(&self) -> String {
+        format!("{} | v{} | rust-{}", self.title, self.version, env::consts::OS)
+    }
+
+    pub fn window(&self) -> Window {
+        self.window.clone()
     }
 }
