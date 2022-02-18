@@ -2,17 +2,13 @@ use rodio::{Decoder, OutputStream, Sample, Sink, Source};
 use std::fs::File;
 use std::io::BufReader;
 use std::path::Path;
-use std::sync::mpsc::{Receiver, TryRecvError};
+use std::sync::mpsc::TryRecvError;
 use std::thread;
 use std::time::Duration;
 
-use crate::error::Error;
+use crate::comm::{Comm, Message};
 
-pub fn play_audio(
-    src: &Path,
-    trigger: Option<&Path>,
-    interrupt: Receiver<()>,
-) -> Result<Receiver<()>, Error> {
+pub fn play_audio(comm: Comm, src: &Path, trigger: Option<&Path>) -> Result<(), ()> {
     let (_stream, stream_handle) =
         OutputStream::try_default().expect("Failed to open output stream");
 
@@ -36,16 +32,18 @@ pub fn play_audio(
 
     while !sink.empty() {
         thread::sleep(Duration::from_millis(500));
-        match interrupt.try_recv() {
-            Ok(_) => return Err(Error::Interrupted),
-            Err(TryRecvError::Disconnected) => panic!("The task seems to have died"),
+        match comm.1.try_recv() {
+            Ok(Message::Interrupt) | Err(TryRecvError::Disconnected) => {
+                sink.stop();
+                return Err(());
+            },
             Err(TryRecvError::Empty) => (),
+            _ => panic!("Unexpected message received"),
         }
     }
-    Ok(interrupt)
+    Ok(())
 }
 
-/// Picks out one channel from a multi-channel audio source
 #[derive(Clone, Debug)]
 pub struct Triggered<I>
 where

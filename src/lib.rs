@@ -1,12 +1,14 @@
-pub mod aux;
+pub mod action;
+pub mod app;
 pub mod block;
+pub mod comm;
 pub mod config;
-pub mod error;
-pub mod logger;
-pub mod question;
+pub mod dispatch;
 pub mod sound;
 pub mod style;
 pub mod task;
+pub mod util;
+pub mod window;
 
 // #[cfg(test)]
 // mod tests {

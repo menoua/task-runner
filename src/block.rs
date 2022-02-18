@@ -1,91 +1,183 @@
-use iced::{Element, Length};
-use iced_native::Svg;
-use serde::Serialize;
-use std::fmt::Debug;
-use std::sync::mpsc;
-use std::sync::mpsc::{Receiver, RecvError, SendError, Sender};
+use std::collections::HashSet;
+use std::fs::File;
+use std::io::Read;
+use std::path::Path;
+use iced::Column;
+use iced_futures::Command;
+use serde::{Serialize, Deserialize};
 
-use crate::aux::{rel_path, rel_path_from};
-use crate::config::Config;
-use crate::error::Error;
-use crate::question::Question;
-use crate::sound::play_audio;
-use crate::task::Message;
+use crate::action::{Action, ID};
+use crate::comm::{Message, Sender};
+use crate::util::timestamp;
 
-pub struct Communication(Sender<()>, Receiver<()>);
-
-impl Communication {
-    pub fn two_way() -> (Communication, Communication) {
-        let (tx1, rx2) = mpsc::channel();
-        let (tx2, rx1) = mpsc::channel();
-
-        (Communication(tx1, rx1), Communication(tx2, rx2))
-    }
-
-    pub fn send(&self) -> Result<(), SendError<()>> {
-        self.0.send(())
-    }
-
-    pub fn recv(&self) -> Result<(), RecvError> {
-        self.1.recv()
-    }
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct Block {
+    #[serde(skip)]
+    id: usize,
+    #[serde(default)]
+    title: String,
+    #[serde(default, skip_serializing)]
+    description: String,
+    #[serde(default)]
+    actions: Vec<Action>,
+    #[serde(skip)]
+    task_dir: String,
+    #[serde(skip)]
+    log_dir: String,
 }
 
-pub trait Block: Debug + Clone + Serialize + Send + 'static {
-    type Config: Config; // + 'static;
-    type Question: Question<Self>; // + 'static;
-    type Answer: Debug + Clone + Serialize + Send + 'static;
+impl Block {
+    pub fn init(&mut self, id: usize, task_dir: &Path) {
+        self.id = id;
+        if self.description.starts_with("~") {
+            let file = task_dir.join(&self.description[1..]);
+            let mut file = File::open(file)
+                .expect("Failed to open block description file");
 
-    fn id(&self) -> String;
+            self.description = String::new();
+            file.read_to_string(&mut self.description)
+                .expect("Failed to read block description file");
+        }
 
-    fn title(&self) -> String {
-        self.id()
+        let mut next_id = 1;
+        let mut last_action = None;
+        for action in &mut self.actions {
+            let (a, b) = action.init(next_id, &last_action, task_dir);
+            next_id = a;
+            last_action = b;
+        }
+
+        // todo!("Make sure deps and limits link to valid ids");
+        for _action in &self.actions {
+            //
+        }
     }
 
-    fn description(&self) -> String {
-        "".to_string()
+    pub fn id(&self) -> usize {
+        self.id
     }
 
-    fn run(id: String, config: Self::Config, comm: Communication) -> Result<(), Error>;
-
-    fn view(&mut self) -> Element<Message<Self>> {
-        Svg::from_path(rel_path("resources/image/fixation-cross-small.svg"))
-            .width(Length::Units(60))
-            .height(Length::Units(60))
-            .into()
+    pub fn title(&self) -> String {
+        self.title.clone()
     }
 
-    fn questionnaire(
-        _id: &str,
-        _config: &Self::Config,
-        // _comm: Communication
-    ) -> Vec<Self::Question> {
-        vec![]
+    pub fn actions(&self) -> Vec<ID> {
+        self.actions
+            .iter()
+            .map(|x| x.id())
+            .collect()
     }
-}
 
-pub trait AudioBlock: Block {
-    fn audio_src(id: &str) -> String;
+    pub fn dependents(&self, id: &ID) -> HashSet<ID> {
+        self.actions
+            .iter()
+            .filter(|x| {
+                if let Some(other) = x.with() {
+                    &other == id
+                } else {
+                    false
+                }
+            })
+            .map(|x| x.id())
+            .collect()
+    }
 
-    fn run(id: String, use_trigger: bool, comm: Communication) -> Result<(), Error> {
-        eprintln!("Starting block `{}`...", id);
-        let Communication(_, rx) = comm;
+    pub fn successors(&self, id: &ID) -> HashSet<ID> {
+        self.actions
+            .iter()
+            .filter(|x| x.after().contains(id))
+            .map(|x| x.id())
+            .collect()
+    }
 
-        let file = rel_path_from(&rel_path("resources/sound"), &Self::audio_src(&id));
-        let trigger = file.with_extension("trig.wav");
+    pub fn is_ready(&self, id: &ID, complete: &HashSet<ID>) -> Option<bool> {
+        self.actions
+            .iter()
+            .filter(|x| x.is(id))
+            .next()
+            .unwrap()
+            .is_ready(complete)
+    }
 
-        let _rx = play_audio(
-            file.as_path(),
-            if use_trigger {
-                Some(trigger.as_path())
-            } else {
-                None
-            },
-            rx,
-        )?;
+    pub fn has_view(&self, id: &ID) -> bool {
+        self.actions
+            .iter()
+            .filter(|x| x.is(id))
+            .next()
+            .unwrap()
+            .has_view()
+    }
 
-        eprintln!("Completed block `{}`.", id);
+    pub fn has_background(&self, id: &ID) -> bool {
+        self.actions
+            .iter()
+            .filter(|x| x.is(id))
+            .next()
+            .unwrap()
+            .has_background()
+    }
 
-        Ok(())
+    pub fn captures_keystrokes(&self, id: &ID) -> bool {
+        self.actions
+            .iter()
+            .filter(|x| x.is(id))
+            .next()
+            .unwrap()
+            .captures_keystrokes()
+    }
+
+    pub fn with_log_dir(mut self, log_dir: &str) -> Self {
+        self.log_dir = Path::new(log_dir)
+            .join(format!("block-{}-{}", self.id, timestamp()))
+            .to_str().unwrap().to_string();
+        std::fs::create_dir_all(&self.log_dir)
+            .expect("Failed to create output directory for block");
+        self
+    }
+
+    pub fn execute(&mut self, id: &str, writer: Sender) -> Command<Message> {
+        self.actions
+            .iter_mut()
+            .filter(|x| x.is(id))
+            .next()
+            .unwrap()
+            .run(writer, &self.log_dir)
+    }
+
+    pub fn update(&mut self, id: &ID, message: Message) -> Command<Message> {
+        self.actions
+            .iter_mut()
+            .filter(|x| x.is(id))
+            .next()
+            .unwrap()
+            .update(message)
+    }
+
+    pub fn view(&mut self, id: &ID) -> Column<Message> {
+        self.actions
+            .iter_mut()
+            .filter(|x| x.is(id))
+            .next()
+            .unwrap()
+            .view()
+    }
+
+    pub fn background(&mut self, id: &ID) -> Column<Message> {
+        self.actions
+            .iter_mut()
+            .filter(|x| x.is(id))
+            .next()
+            .unwrap()
+            .background()
+    }
+
+    pub fn wrap(&mut self, id: &ID) {
+        self.actions
+            .iter_mut()
+            .filter(|x| x.is(id))
+            .next()
+            .unwrap()
+            .wrap()
     }
 }
