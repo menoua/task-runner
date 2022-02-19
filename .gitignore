@@ -1,7 +1,8 @@
 /target
 /pkg
 /output
-examples/Trisyllabic
+/examples/Trisyllabic
+/examples/*.zip
 Cargo.lock
 .idea
 .DS_Store

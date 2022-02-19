@@ -4,6 +4,7 @@ use iced::{Command, Column};
 use crate::action::ID;
 use crate::block::Block;
 use crate::comm::{Message, Sender};
+use crate::global::Global;
 
 #[derive(Debug)]
 pub struct Dispatcher {
@@ -92,7 +93,7 @@ impl Dispatcher {
     }
 
     pub fn complete(&mut self, id: ID) -> Command<Message> {
-        if self.block.is_none() {
+        if self.block.is_none() || self.complete.contains(&id) {
             return Command::none();
         }
         let block = self.block.as_mut().unwrap();
@@ -179,9 +180,9 @@ impl Dispatcher {
         block.finish();
     }
 
-    pub fn view(&mut self) -> Column<Message> {
+    pub fn view(&mut self, global: &Global) -> Column<Message> {
         if let Some(id) = &self.foreground {
-            self.block.as_mut().unwrap().view(id)
+            self.block.as_mut().unwrap().view(id, global)
         } else if let Some(id) = &self.background {
             self.block.as_mut().unwrap().background(id)
         } else {

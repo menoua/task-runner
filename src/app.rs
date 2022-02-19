@@ -4,7 +4,7 @@ use std::time::{Duration, Instant};
 
 use crate::task::Task;
 use crate::comm::{Message, CommLink};
-use crate::gui::IntOrFloat;
+use crate::global::IntOrFloat;
 
 pub struct App
 {
@@ -78,7 +78,7 @@ impl Application for App {
     }
 
     fn view(&mut self) -> Element<Message> {
-        let (inner_x, inner_y) = self.task.gui().content_size();
+        let (inner_x, inner_y) = self.task.global().content_size();
 
         let content = match inner_x {
             IntOrFloat::Integer(i) => Row::new()

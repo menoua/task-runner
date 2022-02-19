@@ -8,6 +8,7 @@ use serde::{Serialize, Deserialize};
 
 use crate::action::{Action, ID};
 use crate::comm::{Message, Sender};
+use crate::global::Global;
 use crate::util::timestamp;
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -21,8 +22,6 @@ pub struct Block {
     description: String,
     #[serde(default)]
     actions: Vec<Action>,
-    #[serde(skip)]
-    task_dir: String,
     #[serde(skip)]
     log_dir: String,
     #[serde(skip)]
@@ -173,13 +172,13 @@ impl Block {
             .update(message)
     }
 
-    pub fn view(&mut self, id: &ID) -> Column<Message> {
+    pub fn view(&mut self, id: &ID, global: &Global) -> Column<Message> {
         self.actions
             .iter_mut()
             .filter(|x| x.is(id))
             .next()
             .unwrap()
-            .view()
+            .view(global)
     }
 
     pub fn background(&mut self, id: &ID) -> Column<Message> {
@@ -205,7 +204,8 @@ impl Block {
 
     pub fn finish(&mut self) {
         let file = File::create(Path::new(&self.log_dir).join("events.log")).unwrap();
-        serde_yaml::to_writer(file, &self.events);
+        serde_yaml::to_writer(file, &self.events)
+            .expect("Failed to write block event log to output file");
         self.events.clear();
     }
 }

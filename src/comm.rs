@@ -27,16 +27,8 @@ pub enum LogMode {
 
 pub type Code = u16;
 
-// #[derive(Debug, Clone)]
-// pub enum Interaction {
-//     Code(ID, ID, Code),
-//     Value(ID, ID, Code, Value),
-//     KeyPress(KeyCode),
-// }
-
 #[derive(Debug, Clone)]
 pub enum Message {
-    // Interaction(Interaction),
     Code(ID, ID, Code),
     Value(ID, ID, Code, Value),
     UIEvent(Code, Value),
@@ -48,6 +40,7 @@ pub enum Message {
     QueryResponse(ID, String),
     ActionComplete(ID),
     BlockComplete,
+    Wrap,
     Null,
 }
 

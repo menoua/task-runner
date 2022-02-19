@@ -31,9 +31,11 @@ pub fn play_audio(comm: Comm, src: &Path, trigger: Option<&Path>) -> Result<(), 
     }
 
     while !sink.empty() {
-        thread::sleep(Duration::from_millis(500));
+        thread::sleep(Duration::from_millis(100));
         match comm.1.try_recv() {
-            Ok(Message::Interrupt) | Err(TryRecvError::Disconnected) => {
+            Ok(Message::Wrap) |
+            Ok(Message::Interrupt) |
+            Err(TryRecvError::Disconnected) => {
                 sink.stop();
                 return Err(());
             },

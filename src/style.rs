@@ -2,11 +2,6 @@ use iced::{button, HorizontalAlignment, Text, VerticalAlignment};
 
 pub use style::Button;
 
-pub const TEXT_SMALL: u16 = 20;
-pub const TEXT_NORMAL: u16 = 24;
-pub const TEXT_LARGE: u16 = 28;
-pub const TEXT_XLARGE: u16 = 32;
-
 pub fn button<'a, T: Clone>(
     state: &'a mut button::State,
     text: &str,

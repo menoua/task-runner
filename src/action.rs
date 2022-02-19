@@ -5,16 +5,17 @@ use std::path::Path;
 use std::sync::mpsc;
 use std::time::Duration;
 use serde::{Deserialize, Serialize};
-use iced::{image, Column, Length, Text, Align, button, Checkbox, TextInput, text_input, Space, Container, slider, HorizontalAlignment};
+use iced::{image, Column, Length, Text, Align, button, Checkbox, TextInput, text_input, Space, Container, slider};
 use iced_futures::Command;
 use iced_native::Image;
 
 use crate::comm::{Comm, Message, Receiver, Sender, Value};
 use crate::sound::play_audio;
 use crate::util::timestamp;
-use crate::style::{button, TEXT_LARGE, TEXT_XLARGE};
+use crate::style::button;
 
 use Question::*;
+use crate::global::Global;
 
 pub type ID = String;
 
@@ -36,8 +37,8 @@ pub struct Info {
     background_image: Option<image::Handle>,
     #[serde(default, skip_serializing_if="Option::is_none")]
     timeout: Option<u16>,
-    #[serde(skip)]
-    task_dir: String,
+    // #[serde(skip)]
+    // task_dir: String,
     #[serde(skip)]
     log_prefix: String,
     #[serde(skip)]
@@ -72,7 +73,7 @@ pub enum Action {
         #[serde(default, flatten)]
         info: Info,
         #[serde(skip)]
-        handles: [button::State; 1],
+        handle: button::State,
     },
 }
 
@@ -346,7 +347,7 @@ impl Action {
         Command::batch(commands)
     }
 
-    pub fn view(&mut self) -> Column<Message> {
+    pub fn view(&mut self, global: &Global) -> Column<Message> {
         let id = self.id();
         match self {
             Action::Instruction { prompt, handle, .. } => {
@@ -354,7 +355,7 @@ impl Action {
                     let e_next = button(
                         handle,
                         "Next",
-                        TEXT_XLARGE)
+                        global.text_size("XLARGE"))
                         .on_press(Message::ActionComplete(id))
                         .width(Length::Units(400));
 
@@ -363,8 +364,8 @@ impl Action {
                         .align_items(Align::Center)
                         .push(Space::with_height(Length::Fill))
                         .push(Text::new(prompt.clone())
-                            .size(TEXT_XLARGE)
-                            .horizontal_alignment(HorizontalAlignment::Center))
+                            .size(global.text_size("XLARGE"))
+                            .horizontal_alignment(global.horizontal_alignment()))
                         .push(Space::with_height(Length::Fill))
                         .push(e_next)
                 } else {
@@ -373,22 +374,24 @@ impl Action {
                         .align_items(Align::Center)
                         .push(Space::with_height(Length::Fill))
                         .push(Text::new(prompt.clone())
-                            .size(TEXT_XLARGE)
-                            .horizontal_alignment(HorizontalAlignment::Center))
+                            .size(global.text_size("XLARGE"))
+                            .horizontal_alignment(global.horizontal_alignment()))
                         .push(Space::with_height(Length::Fill))
                 }
             }
-            Action::Question { list: questions, handles, .. } => {
+            Action::Question { list: questions, handle, .. } => {
                 let mut content = Column::new()
                     // .width(Length::Fill)
                     .spacing(40)
                     .align_items(Align::Start);
                 for (i, quest) in questions.iter_mut().enumerate() {
-                    content = content.push(view::question(quest, i));
+                    content = content.push(view::question(quest, i, global));
                 }
 
-                let [h_submit] = handles;
-                let e_submit = button(h_submit, "Submit", TEXT_XLARGE)
+                let e_submit = button(
+                    handle,
+                    "Submit",
+                    global.text_size("XLARGE"))
                     .on_press(Message::ActionComplete(id))
                     .width(Length::Units(400));
 
@@ -421,7 +424,7 @@ impl Action {
             Action::Audio { info, .. } => {
                 match message {
                     Message::QueryResponse(..) => {
-                        info.comm.as_mut().unwrap().send(message.clone());
+                        info.comm.as_mut().unwrap().send(message.clone()).ok();
                         Command::none()
                     }
                     _ => {
@@ -472,14 +475,19 @@ impl Action {
             Action::Question { info, .. } => {
                 if info.monitor_kb {
                     let file = File::create(format!("{}.keypress", info.log_prefix)).unwrap();
-                    serde_yaml::to_writer(file, &info.keystrokes);
+                    serde_yaml::to_writer(file, &info.keystrokes)
+                        .expect("Failed to write key presses to output file");
+                }
+                if let Some(comm) = &info.comm {
+                    comm.send(Message::Wrap).ok();
                 }
             }
         }
         match self {
             Action::Question { info, list, .. } => {
                 let file = File::create(format!("{}.response", info.log_prefix)).unwrap();
-                serde_yaml::to_writer(file, &list);
+                serde_yaml::to_writer(file, &list)
+                    .expect("Failed to write question responses to output file");
             }
             _ => ()
         }
@@ -503,7 +511,7 @@ pub mod view {
     use iced::{Radio, Row};
     use super::*;
 
-    pub fn question<'a>(quest: &'a mut Question, index: usize) -> Column<'a, Message> {
+    pub fn question<'a>(quest: &'a mut Question, index: usize, global: &Global) -> Column<'a, Message> {
         match quest {
             Question::SingleChoice {
                 prompt,
@@ -523,15 +531,16 @@ pub mod view {
                             (0x01 + ind) as u16,
                             Value::Integer(i as i32)))
                         // .width(Length::Units(250))
-                        .text_size(TEXT_XLARGE)
-                        .size(TEXT_LARGE));
+                        .text_size(global.text_size("XLARGE"))
+                        .size(global.text_size("LARGE")));
                 }
 
                 Column::new()
                     // .width(Length::Fill)
                     .align_items(Align::Start)
                     .spacing(20)
-                    .push(Text::new(prompt.as_str()).size(TEXT_XLARGE))
+                    .push(Text::new(prompt.as_str())
+                        .size(global.text_size("XLARGE")))
                     .push(row)
             }
 
@@ -552,15 +561,16 @@ pub mod view {
                             (0x01 + ind) as u16,
                             Value::Integer(i as i32)))
                         // .width(Length::Units(250))
-                        .text_size(TEXT_XLARGE)
-                        .size(TEXT_LARGE));
+                        .text_size(global.text_size("XLARGE"))
+                        .size(global.text_size("LARGE")));
                 }
 
                 Column::new()
                     // .width(Length::Fill)
                     .align_items(Align::Start)
                     .spacing(20)
-                    .push(Text::new(prompt.as_str()).size(TEXT_XLARGE))
+                    .push(Text::new(prompt.as_str())
+                        .size(global.text_size("XLARGE")))
                     .push(row)
             }
 
@@ -578,14 +588,15 @@ pub mod view {
                     move |value| Message::UIEvent(
                         (0x01 + ind) as u16,
                         Value::String(value)))
-                    .size(TEXT_XLARGE)
+                    .size(global.text_size("XLARGE"))
                     .width(Length::Units(600));
 
                 Column::new()
                     // .width(Length::Fill)
                     .align_items(Align::Start)
                     .spacing(20)
-                    .push(Text::new(prompt.as_str()).size(TEXT_XLARGE))
+                    .push(Text::new(prompt.as_str())
+                        .size(global.text_size("XLARGE")))
                     .push(e_text_input)
             }
 
@@ -613,12 +624,15 @@ pub mod view {
                     // .width(Length::Fill)
                     .align_items(Align::Start)
                     .spacing(20)
-                    .push(Text::new(prompt.as_str()).size(TEXT_XLARGE))
+                    .push(Text::new(prompt.as_str())
+                        .size(global.text_size("XLARGE")))
                     .push(Row::new()
                         .spacing(20)
-                        .push(Text::new(range.start().to_string()).size(TEXT_LARGE))
+                        .push(Text::new(range.start().to_string())
+                            .size(global.text_size("LARGE")))
                         .push(e_slider)
-                        .push(Text::new(range.end().to_string()).size(TEXT_LARGE))
+                        .push(Text::new(range.end().to_string())
+                            .size(global.text_size("LARGE")))
                     )
             }
         }
@@ -631,20 +645,17 @@ pub mod run {
     use crate::config::AudioConfig;
     use super::*;
 
-    pub async fn idle(id: ID, comm: Comm) -> Message {
-        comm.1.recv();
-        Message::ActionComplete(id)
-    }
-
     pub async fn instruction(id: ID, comm: Comm, mut timer: u16) -> Message {
         while timer > 0 {
             std::thread::sleep(Duration::from_secs(1));
             match comm.1.try_recv() {
-                Ok(Message::Interrupt) | Err(TryRecvError::Disconnected) => {
+                Ok(Message::Wrap) |
+                Ok(Message::Interrupt) |
+                Err(TryRecvError::Disconnected) => {
                     return Message::Null;
                 },
                 Err(TryRecvError::Empty) => (),
-                _ => panic!("Unexpected message received"),
+                Ok(msg) => panic!("Unexpected message received: {:?}", msg),
             }
             timer -= 1;
         }
@@ -652,16 +663,24 @@ pub mod run {
     }
 
     pub async fn audio(id: ID, comm: Comm, source: String) -> Message {
-        comm.0.send(Message::Query(id.clone(), String::from("task_dir")));
+        let msg = Message::Query(id.clone(), String::from("task_dir"));
+        if comm.0.send(msg).is_err() {
+            return Message::Null;
+        }
         let task_dir = match comm.1.recv().unwrap() {
             Message::QueryResponse(_, resp) => resp,
+            Message::Wrap => return Message::Null,
             _ => panic!("Got unexpected message"),
         };
 
-        comm.0.send(Message::Query(id.clone(), String::from("config::audio")));
+        let msg = Message::Query(id.clone(), String::from("config::audio"));
+        if comm.0.send(msg).is_err() {
+            return Message::Null;
+        }
         let audio_cfg = match comm.1.recv().unwrap() {
             Message::QueryResponse(_, resp) => AudioConfig::from(resp),
-            _ => panic!("Got unexpected message"),
+            Message::Wrap => return Message::Null,
+            _ => panic!("Invalid message received"),
         };
 
         let file = Path::new(&task_dir).join(&source);

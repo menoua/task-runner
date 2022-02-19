@@ -1,7 +1,6 @@
 use std::env;
 use std::path::PathBuf;
 use iced::{Application, Settings, window};
-use rodio::cpal::Sample;
 
 use neurotask::app::App;
 use neurotask::task::Task;
@@ -14,15 +13,18 @@ fn main() {
         _ => panic!("Usage example: neurotask [task_dir]"),
     };
     let task = Task::new(task_dir);
+    let global = task.global();
+    global.verify();
 
     App::run(Settings {
         default_font: None,
-        default_text_size: (20.0 * task.gui().font_scale()).round() as u16,
+        default_text_size: global.text_size("NORMAL"),
         exit_on_close_request: true,
         antialiasing: false,
         window: window::Settings {
-            size: task.gui().window_size(),
-            resizable: task.gui().resizable(),
+            size: global.window_size(),
+            min_size: global.min_window_size(),
+            resizable: global.resizable(),
             always_on_top: false,
             icon: None,
             ..Default::default()

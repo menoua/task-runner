@@ -1,12 +1,15 @@
+use std::collections::HashSet;
 use std::fmt;
 use iced::{Align, HorizontalAlignment};
 use serde::{Serialize, Deserialize, de};
 
 #[derive(Debug, Default, Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
-pub struct GUI {
+pub struct Global {
     #[serde(default="default::window_size", deserialize_with="deserialize::window_size")]
     window_size: (u32, u32),
+    #[serde(default="default::min_window_size", deserialize_with="deserialize::window_size")]
+    min_window_size: (u32, u32),
     #[serde(default="default::content_size", deserialize_with="deserialize::content_size")]
     content_size: (IntOrFloat, IntOrFloat),
     #[serde(default="default::resizable")]
@@ -66,7 +69,7 @@ mod deserialize {
             type Value = (IntOrFloat, IntOrFloat);
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                formatter.write_str("a string like 1024 x 768")
+                formatter.write_str("a string like 1024 x 768, or 0.8 x 0.8")
             }
 
             fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
@@ -78,23 +81,14 @@ mod deserialize {
 
                 let x = match x.trim().parse::<u32>() {
                     Ok(i) => IntOrFloat::Integer(i),
-                    Err(_) => IntOrFloat::Float(x.trim().parse::<f32>().unwrap()),
+                    Err(_) => IntOrFloat::Float(x.trim().parse::<f32>()
+                        .expect("Content width should be a valid positive number")),
                 };
                 let y = match y.trim().parse::<u32>() {
                     Ok(i) => IntOrFloat::Integer(i),
-                    Err(_) => IntOrFloat::Float(y.trim().parse::<f32>().unwrap()),
+                    Err(_) => IntOrFloat::Float(y.trim().parse::<f32>()
+                        .expect("Content height should be a valid positive number")),
                 };
-
-                if let IntOrFloat::Float(f) = x {
-                    if f < 0.0 || f > 1.0 {
-                        panic!("x and y should either b integers denoting pixels or a float between 0 and 1")
-                    }
-                }
-                if let IntOrFloat::Float(f) = y {
-                    if f < 0.0 || f > 1.0 {
-                        panic!("x and y should either b integers denoting pixels or a float between 0 and 1")
-                    }
-                }
 
                 Ok((x, y))
             }
@@ -105,10 +99,14 @@ mod deserialize {
 }
 
 mod default {
-    use crate::gui::IntOrFloat;
+    use crate::global::IntOrFloat;
 
     pub fn window_size() -> (u32, u32) {
         (900, 780)
+    }
+
+    pub fn min_window_size() -> (u32, u32) {
+        (600, 600)
     }
 
     pub fn content_size() -> (IntOrFloat, IntOrFloat) {
@@ -128,9 +126,13 @@ mod default {
     }
 }
 
-impl GUI {
+impl Global {
     pub fn window_size(&self) -> (u32, u32) {
         self.window_size
+    }
+
+    pub fn min_window_size(&self) -> Option<(u32, u32)> {
+        Some(self.min_window_size)
     }
 
     pub fn content_size(&self) -> (IntOrFloat, IntOrFloat) {
@@ -146,20 +148,65 @@ impl GUI {
     }
 
     pub fn alignment(&self) -> Align {
-        match self.text_alignment.to_lowercase().as_str() {
-            "start" | "left" => Align::Start,
-            "center" => Align::Center,
-            "end" | "right" => Align::End,
+        match self.text_alignment.to_uppercase().as_str() {
+            "START" | "LEFT" => Align::Start,
+            "CENTER" => Align::Center,
+            "END" | "RIGHT" => Align::End,
             _ => panic!("Invalid text alignment value")
         }
     }
 
     pub fn horizontal_alignment(&self) -> HorizontalAlignment {
-        match self.text_alignment.to_lowercase().as_str() {
-            "start" | "left" => HorizontalAlignment::Left,
-            "center" => HorizontalAlignment::Center,
-            "end" | "right" => HorizontalAlignment::Right,
+        match self.text_alignment.to_uppercase().as_str() {
+            "START" | "LEFT" => HorizontalAlignment::Left,
+            "CENTER" => HorizontalAlignment::Center,
+            "END" | "RIGHT" => HorizontalAlignment::Right,
             _ => panic!("Invalid text alignment value")
+        }
+    }
+
+    pub fn text_size(&self, scale: &str) -> u16 {
+        let size = match scale.to_uppercase().as_str() {
+            "TINY" => 16,
+            "SMALL" => 20,
+            "NORMAL" => 24,
+            "LARGE" => 28,
+            "XLARGE" => 32,
+            "XXLARGE" => 36,
+            _ => panic!("Unknown font scale {}", scale),
+        };
+        (self.font_scale * size as f32).round() as u16
+    }
+
+    pub fn verify(&self) {
+        match self.content_size.0 {
+            IntOrFloat::Integer(i) if (i == 0 || i > self.window_size.0) => {
+                panic!("Content width should be positive and less than or equal to window width");
+            }
+            IntOrFloat::Float(f) if (f <= 0.01 || f > 0.99) => {
+                panic!("Fractional content width should be between 0.01 and 0.99 inclusive");
+            }
+            _ => (),
+        }
+        match self.content_size.1 {
+            IntOrFloat::Integer(i) if (i == 0 || i > self.window_size.1) => {
+                panic!("Content height should be positive and less than or equal to window height");
+            }
+            IntOrFloat::Float(f) if (f <= 0.01 || f > 0.99) => {
+                panic!("Fractional content height should be between 0.01 and 0.99 inclusive");
+            }
+            _ => (),
+        }
+
+        if self.font_scale < 0.5 || self.font_scale > 3.0 {
+            panic!("Font scale should be between 0.5 and 3.0");
+        }
+
+        let possible_alignments = HashSet::from([
+            "START", "LEFT", "CENTER", "END", "RIGHT"
+        ]);
+        if !possible_alignments.contains(self.text_alignment.to_uppercase().as_str()) {
+            panic!("Text alignment should be one of: {:?}", possible_alignments);
         }
     }
 }

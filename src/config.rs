@@ -1,9 +1,10 @@
 use iced::{Align, Column, Length, Row, Text, button, Radio};
 use iced_native::Space;
 use serde::{Serialize, Deserialize};
+
 use crate::comm::{Code, Message, Value};
-use crate::style;
-use crate::style::{button, TEXT_LARGE};
+use crate::global::Global;
+use crate::style::{self, button};
 
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub struct Config {
@@ -17,28 +18,38 @@ impl Config {
         self.audio.1
     }
 
-    pub fn view(&mut self) -> Column<Message> {
+    pub fn view(&mut self, global: &Global) -> Column<Message> {
         let mut content = Column::new()
             .width(Length::Fill)
             .spacing(60)
             .align_items(Align::Start);
 
         if !self.audio.1 {
-            content = content.push(self.audio.0.view());
+            content = content.push(self.audio.0.view(global));
         }
+        content = content.push(Space::with_height(Length::Fill));
 
         let [h_cancel, h_revert, h_start] = &mut self.handles;
-        let e_cancel = button(h_cancel, "Cancel", TEXT_LARGE)
+        let e_cancel = button(
+            h_cancel,
+            "Cancel",
+            global.text_size("LARGE"))
             .on_press(Message::UIEvent(0x01, Value::Null))
             .style(style::Button::Secondary)
             .width(Length::Units(200))
             .padding(15);
-        let e_revert = button(h_revert, "Revert", TEXT_LARGE)
+        let e_revert = button(
+            h_revert,
+            "Revert",
+            global.text_size("LARGE"))
             .on_press(Message::UIEvent(0x02, Value::Null))
             .style(style::Button::Destructive)
             .width(Length::Units(200))
             .padding(15);
-        let e_start = button(h_start, "Start!", TEXT_LARGE)
+        let e_start = button(
+            h_start,
+            "Start!",
+            global.text_size("LARGE"))
             .on_press(Message::UIEvent(0x03, Value::Null))
             .style(style::Button::Primary)
             .width(Length::Units(200))
@@ -89,25 +100,25 @@ impl Default for AudioConfig {
 }
 
 impl AudioConfig {
-    pub fn view(&mut self) -> Column<Message> {
+    pub fn view(&mut self, global: &Global) -> Column<Message> {
         let e_mono_t = Radio::new(
             AudioConfig::MonoAndTrigger,
             "L: Audio / R: Trigger",
             Some(self.clone()),
             |_| Message::UIEvent(0x04, Value::Integer(1)))
-            .text_size(TEXT_LARGE);
+            .text_size(global.text_size("LARGE"));
         let e_stereo = Radio::new(
             AudioConfig::Stereo,
             "Stereo audio",
             Some(self.clone()),
             |_| Message::UIEvent(0x04, Value::Integer(2)))
-            .text_size(TEXT_LARGE);
+            .text_size(global.text_size("LARGE"));
 
         Column::new()
             .align_items(Align::Start)
             .spacing(25)
             .push(Text::new("Output audio channel configuration:")
-                      .size(TEXT_LARGE))
+                      .size(global.text_size("LARGE")))
             .push(Row::new()
                 .spacing(40)
                 .push(e_mono_t)

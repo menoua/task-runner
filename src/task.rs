@@ -11,9 +11,9 @@ use crate::block::Block;
 use crate::comm::{Message, Value};
 use crate::config::Config;
 use crate::dispatch::Dispatcher;
-use crate::style::{self, button, TEXT_LARGE, TEXT_XLARGE};
+use crate::style::{self, button};
 use crate::util::timestamp;
-use crate::gui::GUI;
+use crate::global::Global;
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -37,7 +37,7 @@ pub struct Task {
     #[serde(skip)]
     log_dir: String,
     #[serde(default)]
-    gui: GUI,
+    global: Global,
     #[serde(skip)]
     events: Vec<String>,
     #[serde(skip)]
@@ -136,7 +136,8 @@ impl Task {
                             handles: [button::State::new(); 64],
                         };
                         let file = File::create(Path::new(&self.log_dir).join("task.log")).unwrap();
-                        serde_yaml::to_writer(file, &self);
+                        serde_yaml::to_writer(file, &self)
+                            .expect("Failed to write task configuration log to file");
                         Command::none()
                     }
                     (State::Configure, 0x01, _) => {
@@ -155,7 +156,8 @@ impl Task {
                             handles: [button::State::new(); 64],
                         };
                         let file = File::create(Path::new(&self.log_dir).join("task.log")).unwrap();
-                        serde_yaml::to_writer(file, &self);
+                        serde_yaml::to_writer(file, &self)
+                            .expect("Failed to write task configuration log to file");
                         Command::none()
                     }
                     (State::Configure, _, _) => {
@@ -194,15 +196,40 @@ impl Task {
                 self.dispatcher.as_mut().unwrap().update(message)
             }
             Message::Interrupt => {
-                if let Some(block) = self.active_block.take() {
-                    self.events.push(format!("{}  INTERRUPT  {}", timestamp(), block));
-                    let file = File::create(Path::new(&self.log_dir).join("events.log")).unwrap();
-                    serde_yaml::to_writer(file, &self.events);
+                match state {
+                    State::Startup { .. } |
+                    State::Selection { .. } => {
+                        Command::none()
+                    },
+                    State::Configure { .. } => {
+                        self.configuration.reset();
+                        self.state = State::Startup {
+                            handles: [button::State::new(); 2]
+                        };
+                        Command::none()
+                    }
+                    State::Starting { .. } => {
+                        self.state = State::Selection {
+                            handles: [button::State::new(); 64],
+                        };
+                        Command::none()
+                    }
+                    State::Started => {
+                        if let Some(block) = self.active_block.take() {
+                            self.events.push(format!("{}  INTERRUPT  {}", timestamp(), block));
+                            let file = File::create(Path::new(&self.log_dir).join("events.log")).unwrap();
+                            serde_yaml::to_writer(file, &self.events)
+                                .expect("Failed to write interrupted block event log to file");
+
+                            self.state = State::Selection {
+                                handles: [button::State::new(); 64],
+                            };
+                            self.dispatcher.as_mut().unwrap().update(message)
+                        } else {
+                            Command::none()
+                        }
+                    }
                 }
-                self.state = State::Selection {
-                    handles: [button::State::new(); 64],
-                };
-                self.dispatcher.as_mut().unwrap().update(message)
             }
             Message::BlockComplete => {
                 self.state = State::Selection {
@@ -211,7 +238,8 @@ impl Task {
                 if let Some(block) = self.active_block.take() {
                     self.events.push(format!("{}  COMPLETE  {}", timestamp(), block));
                     let file = File::create(Path::new(&self.log_dir).join("events.log")).unwrap();
-                    serde_yaml::to_writer(file, &self.events);
+                    serde_yaml::to_writer(file, &self.events)
+                        .expect("Failed to write completed block event log to file");
                 }
                 self.progress[self.dispatcher.as_ref().unwrap().block_id()-1] = true;
                 self.dispatcher.as_mut().unwrap().update(message)
@@ -240,14 +268,13 @@ impl Task {
         self.active_block = Some(block);
         self.events.push(format!("{}  START  {}", timestamp(), block));
         let file = File::create(Path::new(&self.log_dir).join("events.log")).unwrap();
-        serde_yaml::to_writer(file, &self.events);
+        serde_yaml::to_writer(file, &self.events)
+            .expect("Failed to write block start event to file");
         let block = self.blocks[block-1].clone().with_log_dir(&self.log_dir);
         self.dispatcher.as_mut().unwrap().init(block)
     }
 
     pub fn view(&mut self) -> Column<Message> {
-        let alignment = self.gui().alignment();
-        let horizontal_alignment = self.gui().horizontal_alignment();
         let state = &mut self.state;
         let is_active = self.dispatcher.is_some()
             && self.dispatcher.as_ref().unwrap().is_active();
@@ -258,7 +285,10 @@ impl Task {
                     Space::with_width(Length::Units(200))
                         .into()
                 } else {
-                    button(h_start, "Configure", TEXT_LARGE)
+                    button(
+                        h_start,
+                        "Configure",
+                        self.global.text_size("LARGE"))
                         .on_press(Message::UIEvent(0x01, Value::Null))
                         .style(style::Button::Secondary)
                         .width(Length::Units(200))
@@ -266,7 +296,10 @@ impl Task {
                         .into()
                 };
 
-                let e_start = button(h_config, "Start!", TEXT_LARGE)
+                let e_start = button(
+                    h_config,
+                    "Start!",
+                    self.global.text_size("LARGE"))
                     .on_press(Message::UIEvent(0x02, Value::Null))
                     .style(style::Button::Primary)
                     .width(Length::Units(200))
@@ -277,13 +310,13 @@ impl Task {
                     .push(Column::new()
                         .width(Length::Fill)
                         .spacing(40)
-                        .align_items(alignment)
+                        .align_items(self.global.alignment())
                         .push(Text::new("Instructions")
-                            .size(TEXT_XLARGE)
-                            .horizontal_alignment(horizontal_alignment))
+                            .size(self.global.text_size("XLARGE"))
+                            .horizontal_alignment(self.global.horizontal_alignment()))
                         .push(Text::new(&self.description)
-                            .size(TEXT_LARGE)
-                            .horizontal_alignment(horizontal_alignment)))
+                            .size(self.global.text_size("LARGE"))
+                            .horizontal_alignment(self.global.horizontal_alignment())))
                     .push(Space::with_height(Length::Fill))
                     .push(Row::new()
                         .push(e_config)
@@ -293,7 +326,7 @@ impl Task {
             }
 
             State::Configure => {
-                self.configuration.view()
+                self.configuration.view(&self.global)
             }
 
             State::Selection { handles, .. } => {
@@ -304,7 +337,10 @@ impl Task {
                     .zip(&self.progress)
                     .zip(handles)
                     .map(|(((i, block), is_done), h)| {
-                        button(h, &block.title(), TEXT_XLARGE)
+                        button(
+                            h,
+                            &block.title(),
+                            self.global.text_size("XLARGE"))
                             .on_press(Message::UIEvent((i + 1) as u16, Value::Null))
                             .style(if *is_done { style::Button::Done } else { style::Button::Todo })
                             .width(Length::Units(200))
@@ -333,7 +369,8 @@ impl Task {
                     .spacing(60)
                     .align_items(Align::Center)
                     .push(Space::with_height(Length::Fill))
-                    .push(Text::new("Choose a block to start:").size(TEXT_XLARGE))
+                    .push(Text::new("Choose a block to start:")
+                        .size(self.global.text_size("XLARGE")))
                     .push(rows)
                     .push(Space::with_height(Length::Fill))
             }
@@ -346,12 +383,12 @@ impl Task {
                     .push(Space::with_height(Length::Fill))
                     .push(Text::new(
                         format!("Starting block in {}...", (*wait_for as f32/10.0).ceil() as u16))
-                        .size(TEXT_XLARGE))
+                        .size(self.global.text_size("XLARGE")))
                     .push(Space::with_height(Length::Fill))
             }
 
             State::Started { .. } if is_active => {
-                self.dispatcher.as_mut().unwrap().view()
+                self.dispatcher.as_mut().unwrap().view(&self.global)
             }
 
             _ => Column::new()
@@ -362,7 +399,7 @@ impl Task {
         format!("{} | v{} | rust-{}", self.title, self.version, env::consts::OS)
     }
 
-    pub fn gui(&self) -> GUI {
-        self.gui.clone()
+    pub fn global(&self) -> &Global {
+        &self.global
     }
 }
