@@ -25,6 +25,8 @@ pub struct Block {
     task_dir: String,
     #[serde(skip)]
     log_dir: String,
+    #[serde(skip)]
+    events: Vec<String>,
 }
 
 impl Block {
@@ -48,9 +50,23 @@ impl Block {
             last_action = b;
         }
 
-        // todo!("Make sure deps and limits link to valid ids");
-        for _action in &self.actions {
-            //
+        let ids = HashSet::<ID>::from_iter(self.actions());
+        for action in &self.actions {
+            if !action.after().iter()
+                .all(|id| ids.contains(id)) {
+                panic!("IDs in `after` parameters should correspond to action IDs");
+            }
+            if let Some(id) = action.with() {
+                if !ids.contains(&id) {
+                    panic!("IDs in `with` parameters should correspond to action IDs");
+                }
+            }
+            if action.after().contains(&action.id()) {
+                panic!("An action cannot start after itself");
+            }
+            if action.with() == Some(action.id()) {
+                panic!("An action cannot start with itself");
+            }
         }
     }
 
@@ -136,7 +152,10 @@ impl Block {
         self
     }
 
-    pub fn execute(&mut self, id: &str, writer: Sender) -> Command<Message> {
+    pub fn execute(&mut self, id: &ID, writer: Sender) -> Command<Message> {
+        self.events
+            .push(format!("{}  START  {}", timestamp(), id));
+
         self.actions
             .iter_mut()
             .filter(|x| x.is(id))
@@ -173,11 +192,20 @@ impl Block {
     }
 
     pub fn wrap(&mut self, id: &ID) {
+        self.events
+            .push(format!("{}  WRAP  {}", timestamp(), id));
+
         self.actions
             .iter_mut()
             .filter(|x| x.is(id))
             .next()
             .unwrap()
             .wrap()
+    }
+
+    pub fn finish(&mut self) {
+        let file = File::create(Path::new(&self.log_dir).join("events.log")).unwrap();
+        serde_yaml::to_writer(file, &self.events);
+        self.events.clear();
     }
 }

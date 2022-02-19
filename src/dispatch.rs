@@ -172,9 +172,11 @@ impl Dispatcher {
     }
 
     pub fn wrap_unfinished(&mut self) {
+        let block = self.block.as_mut().unwrap();
         for action in &self.active {
-            self.block.as_mut().unwrap().wrap(action);
+            block.wrap(action);
         }
+        block.finish();
     }
 
     pub fn view(&mut self) -> Column<Message> {
