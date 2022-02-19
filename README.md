@@ -22,8 +22,8 @@ Compiled binaries are provided for macOS and Linux in [bin](https://github.com/m
 
 The simplest usage is to put the appropriate binary file in the task directory (see below) and run it, whether by double-clicking (macOS) or running it from the terminal (macOS and Linux).
 
-To avoid having a separate copy of the binaries for each task, you can use an argument to specify the task directory:<br/>
-`./neurotask path_to_task_dir`.
+To avoid having a separate copy of the binaries for each task, you can use an argument to specify the task directory, e.g.:<br/>
+`bin/neurotask-macos examples/Skeleton`.
 
 ## Task directory
 
@@ -31,8 +31,8 @@ A task directory is a directory that contains a `task.yml` file and any addition
 
 ## Troubleshooting
 
-If during compilation on Linux you get an error saying failed to build "alsa-sys", you need to get the ALSA development files. For example, on Ubuntu you can get them using: `sudo apt-get install libasound2-dev`.
+* Linux-only: If during compilation you get an error saying failed to build `alsa-sys`, you need to get the ALSA development files. For example, on Ubuntu you can get them using: `sudo apt-get install libasound2-dev`.
 
-If the binary fails to startup on Linux with the message "GraphicsAdapterNotFound", you are missing the Vulkan library files. For example, on Ubuntu you can get them using: `sudo apt-get install libvulkan1`
+* Linux-only: If the binary fails to startup with the message `GraphicsAdapterNotFound`, you are missing the Vulkan library files. For example, on Ubuntu you can get them using: `sudo apt-get install libvulkan1`
 
-For some reason, on some speakers the left-right speaker channels are flipped. However, this behavior is consistent with the same device, so as long as you determine once which is which for a device there shouldn't be any problems going forward.
+* For some reason, on some speakers the left-right speaker channels are flipped. However, this behavior is consistent with the same device, so as long as you determine once which is which for a device there shouldn't be any problems going forward.
