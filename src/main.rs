@@ -17,16 +17,16 @@ fn main() {
 
     App::run(Settings {
         default_font: None,
-        default_text_size: (20.0 * task.window().font_scale()).round() as u16,
+        default_text_size: (20.0 * task.gui().font_scale()).round() as u16,
         exit_on_close_request: true,
         antialiasing: false,
         window: window::Settings {
-            size: task.window().size(),
-            resizable: task.window().resizable(),
+            size: task.gui().window_size(),
+            resizable: task.gui().resizable(),
             always_on_top: false,
             icon: None,
             ..Default::default()
         },
         flags: task,
-    });
+    }).unwrap();
 }

@@ -1,6 +1,5 @@
 use std::collections::HashSet;
 use iced::{Command, Column};
-use rodio::queue::queue;
 
 use crate::action::ID;
 use crate::block::Block;
@@ -79,6 +78,7 @@ impl Dispatcher {
             Message::Interrupt |
             Message::BlockComplete => {
                 if self.block.is_some() {
+                    self.wrap_unfinished();
                     self.block = None;
                     self.queue.clear();
                     self.active.clear();
@@ -171,6 +171,12 @@ impl Dispatcher {
         Command::batch(commands)
     }
 
+    pub fn wrap_unfinished(&mut self) {
+        for action in &self.active {
+            self.block.as_mut().unwrap().wrap(action);
+        }
+    }
+
     pub fn view(&mut self) -> Column<Message> {
         if let Some(id) = &self.foreground {
             self.block.as_mut().unwrap().view(id)
@@ -178,6 +184,14 @@ impl Dispatcher {
             self.block.as_mut().unwrap().background(id)
         } else {
             Column::new()
+        }
+    }
+
+    pub fn active_title(&self) -> String {
+        if let Some(block) = &self.block {
+            block.title()
+        } else {
+            "".to_string()
         }
     }
 }

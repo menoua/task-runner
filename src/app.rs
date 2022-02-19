@@ -1,9 +1,10 @@
-use iced::{Application, Clipboard, Column, Command, Container, Element, Length, Row, Space, Subscription, Color};
+use iced::{Application, Clipboard, Column, Command, Container, Element, Length, Row, Space, Subscription};
 use iced_native::subscription;
 use std::time::{Duration, Instant};
 
 use crate::task::Task;
 use crate::comm::{Message, CommLink};
+use crate::gui::IntOrFloat;
 
 pub struct App
 {
@@ -40,6 +41,8 @@ impl Application for App {
                 let now = Instant::now();
                 if now.duration_since(self.last_esc) < Duration::from_millis(250) {
                     self.task.update(message)
+                } else if !self.task.is_active() {
+                    self.task.update(message)
                 } else {
                     self.last_esc = now;
                     Command::none()
@@ -75,19 +78,37 @@ impl Application for App {
     }
 
     fn view(&mut self) -> Element<Message> {
-        let content = Row::new()
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .push(Space::with_width(Length::FillPortion(1)))
-            .push(self.task.view().width(Length::FillPortion(8)))
-            .push(Space::with_width(Length::FillPortion(1)));
+        let (inner_x, inner_y) = self.task.gui().content_size();
 
-        let content = Column::new()
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .push(Space::with_height(Length::FillPortion(1)))
-            .push(content.height(Length::FillPortion(8)))
-            .push(Space::with_height(Length::FillPortion(1)));
+        let content = match inner_x {
+            IntOrFloat::Integer(i) => Row::new()
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .push(Space::with_width(Length::Fill))
+                .push(self.task.view().width(Length::Units(i as u16)))
+                .push(Space::with_width(Length::Fill)),
+            IntOrFloat::Float(f) => Row::new()
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .push(Space::with_width(Length::FillPortion(((1.0-f)*100.0).round() as u16)))
+                .push(self.task.view().width(Length::FillPortion((f*200.0).round() as u16)))
+                .push(Space::with_width(Length::FillPortion(((1.0-f)*100.0).round() as u16))),
+        };
+
+        let content = match inner_y {
+            IntOrFloat::Integer(i) => Column::new()
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .push(Space::with_height(Length::Fill))
+                .push(content.height(Length::Units(i as u16)))
+                .push(Space::with_height(Length::Fill)),
+            IntOrFloat::Float(f) => Column::new()
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .push(Space::with_height(Length::FillPortion(((1.0-f)*100.0).round() as u16)))
+                .push(content.height(Length::FillPortion((f*200.0).round() as u16)))
+                .push(Space::with_height(Length::FillPortion(((1.0-f)*100.0).round() as u16))),
+        };
 
         let content: Element<_> = Container::new(content)
             .width(Length::Fill)

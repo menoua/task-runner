@@ -5,7 +5,7 @@ use std::path::Path;
 use std::sync::mpsc;
 use std::time::Duration;
 use serde::{Deserialize, Serialize};
-use iced::{image, Column, Length, Text, Align, button, Checkbox, TextInput, text_input, Space, Container, slider};
+use iced::{image, Column, Length, Text, Align, button, Checkbox, TextInput, text_input, Space, Container, slider, HorizontalAlignment};
 use iced_futures::Command;
 use iced_native::Image;
 
@@ -26,15 +26,15 @@ pub struct Info {
     with: Option<ID>,
     #[serde(default)]
     after: Option<HashSet<ID>>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if="std::ops::Not::not")]
     monitor_kb: bool,
-    #[serde(skip_deserializing)]
+    #[serde(skip)]
     keystrokes: Vec<String>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if="Option::is_none")]
     background: Option<String>,
     #[serde(skip)]
     background_image: Option<image::Handle>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if="Option::is_none")]
     timeout: Option<u16>,
     #[serde(skip)]
     task_dir: String,
@@ -362,7 +362,9 @@ impl Action {
                         .width(Length::Fill)
                         .align_items(Align::Center)
                         .push(Space::with_height(Length::Fill))
-                        .push(Text::new(prompt.clone()).size(TEXT_XLARGE))
+                        .push(Text::new(prompt.clone())
+                            .size(TEXT_XLARGE)
+                            .horizontal_alignment(HorizontalAlignment::Center))
                         .push(Space::with_height(Length::Fill))
                         .push(e_next)
                 } else {
@@ -370,13 +372,15 @@ impl Action {
                         .width(Length::Fill)
                         .align_items(Align::Center)
                         .push(Space::with_height(Length::Fill))
-                        .push(Text::new(prompt.clone()).size(TEXT_XLARGE))
+                        .push(Text::new(prompt.clone())
+                            .size(TEXT_XLARGE)
+                            .horizontal_alignment(HorizontalAlignment::Center))
                         .push(Space::with_height(Length::Fill))
                 }
             }
             Action::Question { list: questions, handles, .. } => {
                 let mut content = Column::new()
-                    .width(Length::Fill)
+                    // .width(Length::Fill)
                     .spacing(40)
                     .align_items(Align::Start);
                 for (i, quest) in questions.iter_mut().enumerate() {
@@ -389,7 +393,7 @@ impl Action {
                     .width(Length::Units(400));
 
                 Column::new()
-                    .width(Length::Fill)
+                    // .width(Length::Fill)
                     .align_items(Align::Center)
                     .push(content)
                     .push(Space::with_height(Length::Fill))
@@ -507,7 +511,7 @@ pub mod view {
                 answer
             } => {
                 let mut row = Row::new()
-                    .width(Length::Fill)
+                    // .width(Length::Fill)
                     .spacing(40);
                 for i in 0..options.len() {
                     let ind = index.clone();
@@ -515,7 +519,7 @@ pub mod view {
                         i,
                         options[i].clone(),
                         answer.clone(),
-                        move |value| Message::UIEvent(
+                        move |_value| Message::UIEvent(
                             (0x01 + ind) as u16,
                             Value::Integer(i as i32)))
                         // .width(Length::Units(250))
@@ -524,7 +528,7 @@ pub mod view {
                 }
 
                 Column::new()
-                    .width(Length::Fill)
+                    // .width(Length::Fill)
                     .align_items(Align::Start)
                     .spacing(20)
                     .push(Text::new(prompt.as_str()).size(TEXT_XLARGE))
@@ -537,7 +541,7 @@ pub mod view {
                 answer
             } => {
                 let mut row = Row::new()
-                    .width(Length::Fill)
+                    // .width(Length::Fill)
                     .spacing(40);
                 for i in 0..options.len() {
                     let ind = index.clone();
@@ -553,7 +557,7 @@ pub mod view {
                 }
 
                 Column::new()
-                    .width(Length::Fill)
+                    // .width(Length::Fill)
                     .align_items(Align::Start)
                     .spacing(20)
                     .push(Text::new(prompt.as_str()).size(TEXT_XLARGE))
@@ -574,10 +578,11 @@ pub mod view {
                     move |value| Message::UIEvent(
                         (0x01 + ind) as u16,
                         Value::String(value)))
-                    .size(TEXT_XLARGE);
+                    .size(TEXT_XLARGE)
+                    .width(Length::Units(600));
 
                 Column::new()
-                    .width(Length::Fill)
+                    // .width(Length::Fill)
                     .align_items(Align::Start)
                     .spacing(20)
                     .push(Text::new(prompt.as_str()).size(TEXT_XLARGE))
@@ -601,10 +606,11 @@ pub mod view {
                     move |value| Message::UIEvent(
                         (0x01 + ind) as u16,
                         Value::Float(value)))
-                    .step(*step);
+                    .step(*step)
+                    .width(Length::Units(500));
 
                 Column::new()
-                    .width(Length::Fill)
+                    // .width(Length::Fill)
                     .align_items(Align::Start)
                     .spacing(20)
                     .push(Text::new(prompt.as_str()).size(TEXT_XLARGE))

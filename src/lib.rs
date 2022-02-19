@@ -8,7 +8,7 @@ pub mod sound;
 pub mod style;
 pub mod task;
 pub mod util;
-pub mod window;
+pub mod gui;
 
 // #[cfg(test)]
 // mod tests {
