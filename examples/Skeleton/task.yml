@@ -2,9 +2,10 @@ title: Example
 version: 1.0
 description: ~resources/description.txt
 
-gui:
+global:
   window_size: 900 x 780
-  content_size: 0.8 x 0.8
+  min_window_size: 800 x 700
+  content_size: 700 x 0.82
   resizable: true
   font_scale: 1.0
   text_alignment: center
@@ -17,11 +18,11 @@ blocks:
     actions:
       - Instruction:
           prompt: Press the button every time you hear a beep
-          timer: 3
+          timer: 3 # Show instruction for a duration of 3 seconds
       - Audio:
-          source: resources/block1.wav
-          background: resources/fixation-cross-small.png
-          monitor_kb: true
+          source: resources/block1.wav # Location of audio file, relative to task directory
+          background: resources/fixation-cross-small.png # Optional background image
+          monitor_kb: true # Key presses are logged while this audio file is playing
       - Question:
           list:
             - MultiChoice:
@@ -41,11 +42,11 @@ blocks:
     actions:
       - Instruction:
           prompt: Press Next to advance
-          timer: 0
+          timer: 0 # Wait for user to press a button to move on
       - Audio:
           source: resources/block2a.flac
-      - Nothing:
+      - Nothing: # This action does not do anything but can be used to organize other actions
           background: resources/fixation-cross-small.png
-          timeout: 2
+          timeout: 2 # Stop action after 2 seconds no matter what, applicable to all actions
       - Audio:
           source: resources/block2b.wav
