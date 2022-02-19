@@ -1,4 +1,4 @@
-use iced::{Align, Column, Length, Row, Text, button, Radio};
+use iced::{Column, Length, Row, Text, button, Radio};
 use iced_native::Space;
 use serde::{Serialize, Deserialize};
 
@@ -22,7 +22,10 @@ impl Config {
         let mut content = Column::new()
             .width(Length::Fill)
             .spacing(60)
-            .align_items(Align::Start);
+            .align_items(global.alignment())
+            .push(Text::new("Configuration")
+                .size(global.text_size("XLARGE"))
+                .horizontal_alignment(global.horizontal_alignment()));
 
         if !self.audio.1 {
             content = content.push(self.audio.0.view(global));
@@ -115,9 +118,9 @@ impl AudioConfig {
             .text_size(global.text_size("LARGE"));
 
         Column::new()
-            .align_items(Align::Start)
+            .align_items(global.alignment())
             .spacing(25)
-            .push(Text::new("Output audio channel configuration:")
+            .push(Text::new("Output audio channel configuration")
                       .size(global.text_size("LARGE")))
             .push(Row::new()
                 .spacing(40)
