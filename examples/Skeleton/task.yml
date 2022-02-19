@@ -2,17 +2,32 @@ title: Example
 version: 1.0
 description: ~resources/description.txt
 
+# Global user interface options
+# If a subset or all of these features are omitted, the default values will be used
 global:
-  window_size: 900 x 780
-  min_window_size: 800 x 700
-  content_size: 700 x 0.82
-  resizable: true
-  font_scale: 1.0
-  text_alignment: center
+  window_size: 900 x 780 # Outer size of the program window in pixels
+  min_window_size: 800 x 700 # Minimum allowed window size in pixels
+  content_size: 700 x 0.82 # Inner size of content, either as pixels or fraction of outer window
+  resizable: true # Whether to allow resizing the window by user
+  font_scale: 1.0 # Text size scaling, a value between 0.5 and 3.0
+  text_alignment: center # One of left, center, or right
 
+# Task configuration options
+#     All configurations are of form [ value, true/false ]. The value determines the
+#     default value for the configuration, while the true/false determines whether
+#     that value should be forced. Any configuration items set to false will be
+#     configurable from within the program by the user.
+# 
+# 1. audio -> one of MonoAndTrigger or Stereo
+#     If MonoAndTrigger, for each audio file another one with the same location and
+#     name, but .trig.wav extension should be present, which has the same sampling
+#     rate and the same number of samples.
+# 
+# If a subset or all of these features are omitted, the default values will be used
 configuration:
   audio: [ Stereo, false ]
 
+# A list of experiment blocks, each containing a title and a list of actions to perform
 blocks:
   - title: 1st Block
     actions:
