@@ -1,0 +1,51 @@
+title: Example
+version: 1.0
+description: ~resources/description.txt
+
+gui:
+  window_size: 900 x 780
+  content_size: 0.8 x 0.8
+  resizable: true
+  font_scale: 1.0
+  text_alignment: center
+
+configuration:
+  audio: [ Stereo, false ]
+
+blocks:
+  - title: 1st Block
+    actions:
+      - Instruction:
+          prompt: Press the button every time you hear a beep
+          timer: 3
+      - Audio:
+          source: resources/block1.wav
+          background: resources/fixation-cross-small.png
+          monitor_kb: true
+      - Question:
+          list:
+            - MultiChoice:
+                prompt: Which of the following are colors?
+                options: [ Wind, Track, Blue, Yellow ]
+            - SingleChoice:
+                prompt: "Pick only one option:"
+                options: [ Alpha, Beta, Gamma, Delta ] 
+            - ShortAnswer:
+                prompt: "Write a short sentence:"
+            - Slider:
+                prompt: "Use the slider to pick a number from the range:"
+                range: [ 0.0, 100.0 ]
+                step: 5.0
+
+  - title: 2nd Block
+    actions:
+      - Instruction:
+          prompt: Press Next to advance
+          timer: 0
+      - Audio:
+          source: resources/block2a.flac
+      - Nothing:
+          background: resources/fixation-cross-small.png
+          timeout: 2
+      - Audio:
+          source: resources/block2b.wav

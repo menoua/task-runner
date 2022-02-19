@@ -1,0 +1,6 @@
+This is a skeleton task to demonstrate usage.
+
+This is the second line of the description.
+
+Press escape twice in quick succession to interrupt a block in progress.
+
