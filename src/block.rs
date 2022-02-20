@@ -9,7 +9,7 @@ use serde::{Serialize, Deserialize};
 use crate::action::{Action, ID};
 use crate::comm::{Message, Sender};
 use crate::global::Global;
-use crate::util::timestamp;
+use crate::util::{timestamp, async_write_to_file};
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -115,6 +115,15 @@ impl Block {
             .is_ready(complete)
     }
 
+    pub fn is_expired(&self, id: &ID, complete: &HashSet<ID>) -> Option<bool> {
+        self.actions
+            .iter()
+            .filter(|x| x.is(id))
+            .next()
+            .unwrap()
+            .is_expired(complete)
+    }
+
     pub fn has_view(&self, id: &ID) -> bool {
         self.actions
             .iter()
@@ -202,10 +211,19 @@ impl Block {
             .wrap()
     }
 
+    pub fn skip(&mut self, id: &ID) {
+        self.events
+            .push(format!("{}  SKIP  {}", timestamp(), id));
+    }
+
     pub fn finish(&mut self) {
-        let file = File::create(Path::new(&self.log_dir).join("events.log")).unwrap();
-        serde_yaml::to_writer(file, &self.events)
-            .expect("Failed to write block event log to output file");
+        async_write_to_file(
+            Path::new(&self.log_dir).join("events.log").to_str().unwrap().to_string(),
+            self.events.clone(),
+            "Failed to write block event log to output file");
+        // let file = File::create(Path::new(&self.log_dir).join("events.log")).unwrap();
+        // serde_yaml::to_writer(file, &self.events)
+        //     .expect("Failed to write block event log to output file");
         self.events.clear();
     }
 }

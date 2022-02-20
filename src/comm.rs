@@ -94,7 +94,7 @@ impl<H, I> Recipe<H, I> for CommLink
                             Some((message, comm_link))
                         },
                         Err(TryRecvError::Empty) => {
-                            std::thread::sleep(Duration::from_millis(5));
+                            std::thread::sleep(Duration::from_millis(1));
                             Some((Message::Null, comm_link))
                         },
                         Err(TryRecvError::Disconnected) => {

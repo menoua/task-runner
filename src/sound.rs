@@ -31,7 +31,7 @@ pub fn play_audio(comm: Comm, src: &Path, trigger: Option<&Path>, stream_handle:
     }
 
     while !sink.empty() {
-        thread::sleep(Duration::from_millis(5));
+        thread::sleep(Duration::from_millis(1));
         match comm.1.try_recv() {
             Ok(Message::Wrap) |
             Ok(Message::Interrupt) |

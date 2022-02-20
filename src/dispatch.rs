@@ -127,11 +127,25 @@ impl Dispatcher {
         }
         let block = self.block.as_mut().unwrap();
 
-        let mut ready: HashSet<_> = self.queue
-            .iter()
-            .filter(|id| block.is_ready(id, &self.complete).unwrap_or(false))
-            .cloned()
-            .collect();
+        let mut ready = HashSet::new();
+        let mut done = false;
+        while !done {
+            done = true;
+            ready = self.queue
+                .iter()
+                .filter(|id| block.is_ready(id, &self.complete).unwrap_or(false))
+                .cloned()
+                .collect();
+
+            for id in ready.iter() {
+                if block.is_expired(id, &self.complete).unwrap_or(false) {
+                    self.queue.remove(id);
+                    self.complete.insert(id.clone());
+                    block.skip(id);
+                    done = false;
+                }
+            }
+        }
 
         let mut done = false;
         while !done {

@@ -146,6 +146,6 @@ blocks:
           after: [ wait ]
           source: resources/block2b.wav
       - Instruction:
-          id: start2
           prompt: The End
+          after: [ start2 ]
           timer: 1

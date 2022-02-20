@@ -1,5 +1,4 @@
 use std::collections::HashSet;
-use std::fs::File;
 use std::ops::RangeInclusive;
 use std::path::Path;
 use std::sync::mpsc;
@@ -11,11 +10,11 @@ use iced_native::Image;
 
 use crate::comm::{Comm, Message, Receiver, Sender, Value};
 use crate::sound::play_audio;
-use crate::util::timestamp;
+use crate::util::{timestamp, async_write_to_file};
+use crate::global::Global;
 use crate::style::button;
 
 use Question::*;
-use crate::global::Global;
 
 pub type ID = String;
 
@@ -122,8 +121,9 @@ impl Question {
             ShortAnswer { handles, .. } => {
                 *handles = [text_input::State::new(); 1];
             }
-            Slider { handles, .. } => {
+            Slider { handles, answer, range, .. } => {
                 *handles = [slider::State::new(); 1];
+                *answer = *range.start();
             }
             _ => ()
         }
@@ -261,6 +261,21 @@ impl Action {
             Action::Question { info, .. } => {
                 if let Some(ids) = &info.after {
                     Some(ids.iter().all(|x| complete.contains(x)))
+                } else {
+                    None
+                }
+            }
+        }
+    }
+
+    pub fn is_expired(&self, complete: &HashSet<ID>) -> Option<bool> {
+        match self {
+            Action::Instruction { info, .. } |
+            Action::Audio { info, .. } |
+            Action::Nothing { info, .. } |
+            Action::Question { info, .. } => {
+                if let Some(id) = &info.with {
+                    Some(complete.contains(id))
                 } else {
                     None
                 }
@@ -478,9 +493,10 @@ impl Action {
             Action::Nothing { info, .. } |
             Action::Question { info, .. } => {
                 if info.monitor_kb {
-                    let file = File::create(format!("{}.keypress", info.log_prefix)).unwrap();
-                    serde_yaml::to_writer(file, &info.keystrokes)
-                        .expect("Failed to write key presses to output file");
+                    async_write_to_file(
+                        format!("{}.keypress", info.log_prefix),
+                        info.keystrokes.clone(),
+                        "Failed to write key presses to output file");
                 }
                 if let Some(comm) = &info.comm {
                     comm.send(Message::Wrap).ok();
@@ -489,9 +505,13 @@ impl Action {
         }
         match self {
             Action::Question { info, list, .. } => {
-                let file = File::create(format!("{}.response", info.log_prefix)).unwrap();
-                serde_yaml::to_writer(file, &list)
-                    .expect("Failed to write question responses to output file");
+                async_write_to_file(
+                    format!("{}.response", info.log_prefix),
+                    list.clone(),
+                    "Failed to write question responses to output file");
+                // let file = File::create(format!("{}.response", info.log_prefix)).unwrap();
+                // serde_yaml::to_writer(file, &list)
+                //     .expect("Failed to write question responses to output file");
             }
             _ => ()
         }
