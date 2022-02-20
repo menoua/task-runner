@@ -33,8 +33,6 @@ pub struct Task {
     #[serde(skip)]
     state: State,
     #[serde(skip)]
-    root_dir: String,
-    #[serde(skip)]
     log_dir: String,
     #[serde(default)]
     global: Global,
@@ -94,7 +92,7 @@ impl Task {
         }
         task.progress = vec![false; task.blocks.len()];
 
-        task.root_dir = task_dir.to_str().unwrap().to_string();
+        task.global.set_dir(task_dir.to_str().unwrap());
         task
     }
 
@@ -111,19 +109,14 @@ impl Task {
                 self.dispatcher = Some(Dispatcher::new(writer));
                 Command::none()
             }
-            Message::Query(from, key) => {
-                let response = Message::QueryResponse(
-                    from,
-                    match key.as_str() {
-                        "task_dir" => {
-                            self.root_dir.clone()
-                        },
-                        string if string.starts_with("config::") => {
-                            self.configuration.query(&key[8..])
-                        },
-                        _ => panic!("Invalid query key: {}", key),
-                    });
-                self.dispatcher.as_mut().unwrap().update(response)
+            Message::Query(_from, _key) => {
+                // let response = Message::QueryResponse(
+                //     from,
+                //     match key.as_str() {
+                //         _ => panic!("Invalid query key: {}", key),
+                //     });
+                // self.dispatcher.as_mut().unwrap().update(response, &self.global)
+                Command::none()
             }
             Message::UIEvent(code, value) => {
                 match (state, code, value.clone()) {
@@ -135,6 +128,7 @@ impl Task {
                         self.state = State::Selection {
                             handles: [button::State::new(); 64],
                         };
+                        self.global.set_config(&self.configuration);
                         let file = File::create(Path::new(&self.log_dir).join("task.log")).unwrap();
                         serde_yaml::to_writer(file, &self)
                             .expect("Failed to write task configuration log to file");
@@ -155,6 +149,7 @@ impl Task {
                         self.state = State::Selection {
                             handles: [button::State::new(); 64],
                         };
+                        self.global.set_config(&self.configuration);
                         let file = File::create(Path::new(&self.log_dir).join("task.log")).unwrap();
                         serde_yaml::to_writer(file, &self)
                             .expect("Failed to write task configuration log to file");
@@ -184,7 +179,7 @@ impl Task {
                     }
                     (State::Started { .. }, _, _) if is_active => {
                         self.dispatcher.as_mut().unwrap()
-                            .update(Message::UIEvent(code, value))
+                            .update(Message::UIEvent(code, value), &self.global)
                     }
                     _ => Command::none(),
                 }
@@ -193,7 +188,7 @@ impl Task {
             Message::Value(..) |
             Message::KeyPress(..) |
             Message::ActionComplete(..) => {
-                self.dispatcher.as_mut().unwrap().update(message)
+                self.dispatcher.as_mut().unwrap().update(message, &self.global)
             }
             Message::Interrupt => {
                 match state {
@@ -224,7 +219,7 @@ impl Task {
                             self.state = State::Selection {
                                 handles: [button::State::new(); 64],
                             };
-                            self.dispatcher.as_mut().unwrap().update(message)
+                            self.dispatcher.as_mut().unwrap().update(message, &self.global)
                         } else {
                             Command::none()
                         }
@@ -242,7 +237,7 @@ impl Task {
                         .expect("Failed to write completed block event log to file");
                 }
                 self.progress[self.dispatcher.as_ref().unwrap().block_id()-1] = true;
-                self.dispatcher.as_mut().unwrap().update(message)
+                self.dispatcher.as_mut().unwrap().update(message, &self.global)
             }
             _ => {
                 panic!("Asked to relay invalid message type");
@@ -265,13 +260,14 @@ impl Task {
         if self.dispatcher.as_ref().unwrap().is_active() {
             panic!("Tried to start a new block when another one is still running");
         }
+        self.global.reset_io();
         self.active_block = Some(block);
         self.events.push(format!("{}  START  {}", timestamp(), block));
         let file = File::create(Path::new(&self.log_dir).join("events.log")).unwrap();
         serde_yaml::to_writer(file, &self.events)
             .expect("Failed to write block start event to file");
         let block = self.blocks[block-1].clone().with_log_dir(&self.log_dir);
-        self.dispatcher.as_mut().unwrap().init(block)
+        self.dispatcher.as_mut().unwrap().init(block, &self.global)
     }
 
     pub fn view(&mut self) -> Column<Message> {

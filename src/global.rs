@@ -1,7 +1,10 @@
 use std::collections::HashSet;
 use std::fmt;
+use std::fmt::{Debug, Formatter};
 use iced::{Align, HorizontalAlignment};
+use rodio::{OutputStream, OutputStreamHandle};
 use serde::{Serialize, Deserialize, de};
+use crate::config::Config;
 
 #[derive(Debug, Default, Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -18,6 +21,12 @@ pub struct Global {
     font_scale: f32,
     #[serde(default="default::text_alignment")]
     text_alignment: String,
+    #[serde(skip)]
+    root_dir: String,
+    #[serde(skip)]
+    config: Option<Config>,
+    #[serde(skip)]
+    io: IO,
 }
 
 #[derive(Debug, Clone, Copy, Serialize)]
@@ -207,6 +216,67 @@ impl Global {
         ]);
         if !possible_alignments.contains(self.text_alignment.to_uppercase().as_str()) {
             panic!("Text alignment should be one of: {:?}", possible_alignments);
+        }
+    }
+
+    pub fn set_dir(&mut self, dir: &str) {
+        self.root_dir = dir.to_string();
+    }
+
+    pub fn dir(&self) -> &str {
+        &self.root_dir
+    }
+
+    pub fn set_config(&mut self, config: &Config) {
+        self.config = Some(config.clone());
+    }
+
+    pub fn config(&self) -> &Config {
+        self.config.as_ref().unwrap()
+    }
+
+    pub fn io(&self) -> &IO {
+        &self.io
+    }
+
+    pub fn reset_io(&mut self) {
+        self.io.reset();
+    }
+}
+
+#[derive(Default)]
+pub struct IO {
+    audio_stream: Option<OutputStream>,
+    audio_stream_handle: Option<OutputStreamHandle>,
+}
+
+impl IO {
+    pub fn reset(&mut self) {
+        let (stream, stream_handle) =
+            OutputStream::try_default().expect("Failed to open output stream");
+        self.audio_stream = Some(stream);
+        self.audio_stream_handle = Some(stream_handle);
+    }
+
+    pub fn audio_stream(&self) -> OutputStreamHandle {
+        self.audio_stream_handle.as_ref().unwrap().clone()
+    }
+}
+
+impl Debug for IO {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self.audio_stream {
+            Some(_) => f.write_str("Open audio stream\n"),
+            None => f.write_str("Closed audio stream\n"),
+        }
+    }
+}
+
+impl Clone for IO {
+    fn clone(&self) -> Self {
+        IO {
+            audio_stream: None,
+            audio_stream_handle: None,
         }
     }
 }

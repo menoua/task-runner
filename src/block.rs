@@ -151,7 +151,7 @@ impl Block {
         self
     }
 
-    pub fn execute(&mut self, id: &ID, writer: Sender) -> Command<Message> {
+    pub fn execute(&mut self, id: &ID, writer: Sender, global: &Global) -> Command<Message> {
         self.events
             .push(format!("{}  START  {}", timestamp(), id));
 
@@ -160,16 +160,16 @@ impl Block {
             .filter(|x| x.is(id))
             .next()
             .unwrap()
-            .run(writer, &self.log_dir)
+            .run(writer, &self.log_dir, global)
     }
 
-    pub fn update(&mut self, id: &ID, message: Message) -> Command<Message> {
+    pub fn update(&mut self, id: &ID, message: Message, global: &Global) -> Command<Message> {
         self.actions
             .iter_mut()
             .filter(|x| x.is(id))
             .next()
             .unwrap()
-            .update(message)
+            .update(message, global)
     }
 
     pub fn view(&mut self, id: &ID, global: &Global) -> Column<Message> {

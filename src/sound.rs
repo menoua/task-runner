@@ -1,4 +1,4 @@
-use rodio::{Decoder, OutputStream, Sample, Sink, Source};
+use rodio::{Decoder, OutputStreamHandle, Sample, Sink, Source};
 use std::fs::File;
 use std::io::BufReader;
 use std::path::Path;
@@ -8,13 +8,13 @@ use std::time::Duration;
 
 use crate::comm::{Comm, Message};
 
-pub fn play_audio(comm: Comm, src: &Path, trigger: Option<&Path>) -> Result<(), ()> {
-    let (_stream, stream_handle) =
-        OutputStream::try_default().expect("Failed to open output stream");
+pub fn play_audio(comm: Comm, src: &Path, trigger: Option<&Path>, stream_handle: OutputStreamHandle) -> Result<(), ()> {
+    // let (_stream, stream_handle) =
+    //     OutputStream::try_default().expect("Failed to open output stream");
 
-    let sink = Sink::try_new(&stream_handle).expect("Failed to open sink stream");
+    let sink = Sink::try_new(&stream_handle)
+        .expect("Failed to open sink stream");
 
-    println!("Playing audio file: {:?}", src);
     let file = BufReader::new(File::open(src).unwrap());
     let source = Decoder::new(file).unwrap();
 
@@ -31,7 +31,7 @@ pub fn play_audio(comm: Comm, src: &Path, trigger: Option<&Path>) -> Result<(), 
     }
 
     while !sink.empty() {
-        thread::sleep(Duration::from_millis(100));
+        thread::sleep(Duration::from_millis(5));
         match comm.1.try_recv() {
             Ok(Message::Wrap) |
             Ok(Message::Interrupt) |

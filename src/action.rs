@@ -296,7 +296,7 @@ impl Action {
         }
     }
 
-    pub fn run(&mut self, writer: Sender, log_dir: &str) -> Command<Message> {
+    pub fn run(&mut self, writer: Sender, log_dir: &str, global: &Global) -> Command<Message> {
         match self {
             Action::Instruction { info, ..} |
             Action::Audio { info, ..} |
@@ -335,10 +335,14 @@ impl Action {
                 }
             }
             Action::Audio { source, .. } => {
+                let source = Path::new(global.dir()).join(source);
+                let use_trigger = global.config().use_trigger();
+                let stream_handle = global.io().audio_stream();
+
                 let source = source.clone();
                 let rx = self.new_comm_link();
                 commands.push(Command::perform(
-                    run::audio(self.id(), (writer, rx), source),
+                    run::audio(self.id(), (writer, rx), source, use_trigger, stream_handle),
                     |msg| msg));
             }
             _ => (),
@@ -407,7 +411,7 @@ impl Action {
         }
     }
 
-    pub fn update(&mut self, message: Message) -> Command<Message> {
+    pub fn update(&mut self, message: Message, _global: &Global) -> Command<Message> {
         if let Message::KeyPress(key_code) = message {
             return match self {
                 Action::Audio { info, .. } |
@@ -640,9 +644,9 @@ pub mod view {
 }
 
 pub mod run {
-    use std::path::Path;
+    use std::path::PathBuf;
     use std::sync::mpsc::TryRecvError;
-    use crate::config::AudioConfig;
+    use rodio::OutputStreamHandle;
     use super::*;
 
     pub async fn instruction(id: ID, comm: Comm, mut timer: u16) -> Message {
@@ -662,40 +666,11 @@ pub mod run {
         Message::ActionComplete(id)
     }
 
-    pub async fn audio(id: ID, comm: Comm, source: String) -> Message {
-        let msg = Message::Query(id.clone(), String::from("task_dir"));
-        if comm.0.send(msg).is_err() {
-            return Message::Null;
-        }
-        let task_dir = match comm.1.recv().unwrap() {
-            Message::QueryResponse(_, resp) => resp,
-            Message::Wrap => return Message::Null,
-            _ => panic!("Got unexpected message"),
-        };
+    pub async fn audio(id: ID, comm: Comm, source: PathBuf, use_trigger: bool, stream_handle: OutputStreamHandle) -> Message {
+        let trigger = source.with_extension("trig.wav");
+        let trigger = if use_trigger { Some(trigger.as_path()) } else { None };
 
-        let msg = Message::Query(id.clone(), String::from("config::audio"));
-        if comm.0.send(msg).is_err() {
-            return Message::Null;
-        }
-        let audio_cfg = match comm.1.recv().unwrap() {
-            Message::QueryResponse(_, resp) => AudioConfig::from(resp),
-            Message::Wrap => return Message::Null,
-            _ => panic!("Invalid message received"),
-        };
-
-        let file = Path::new(&task_dir).join(&source);
-        let trigger = file.with_extension("trig.wav");
-
-        let result = play_audio(
-            comm,
-            file.as_path(),
-            match audio_cfg {
-                AudioConfig::MonoAndTrigger => Some(trigger.as_path()),
-                AudioConfig::Stereo => None,
-            }
-        );
-
-        match result {
+        match play_audio(comm, source.as_path(), trigger, stream_handle) {
             Ok(()) => Message::ActionComplete(id),
             Err(()) => Message::Null,
         }

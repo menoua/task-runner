@@ -6,7 +6,7 @@ use crate::comm::{Code, Message, Value};
 use crate::global::Global;
 use crate::style::{self, button};
 
-#[derive(Debug, Default, Deserialize, Serialize)]
+#[derive(Debug, Default, Clone, Deserialize, Serialize)]
 pub struct Config {
     audio: (AudioConfig, bool),
     #[serde(skip)]
@@ -84,11 +84,8 @@ impl Config {
         }
     }
 
-    pub fn query(&self, key: &str) -> String {
-        match key {
-            "audio" => self.audio.0.into(),
-            _ => panic!("Invalid config query")
-        }
+    pub fn use_trigger(&self) -> bool {
+        matches!(self.audio.0, AudioConfig::MonoAndTrigger)
     }
 }
 

@@ -40,13 +40,13 @@ impl Dispatcher {
         self.block.is_some()
     }
 
-    pub fn init(&mut self, block: Block) -> Command<Message> {
+    pub fn init(&mut self, block: Block, global: &Global) -> Command<Message> {
         self.queue = HashSet::from_iter(block.actions());
         self.block = Some(block);
-        self.next()
+        self.next(global)
     }
 
-    pub fn update(&mut self, message: Message) -> Command<Message> {
+    pub fn update(&mut self, message: Message, global: &Global) -> Command<Message> {
         if self.block.is_none() {
             return Command::none()
         }
@@ -55,26 +55,26 @@ impl Dispatcher {
             Message::Code(_, id, ..) |
             Message::Value(_, id, ..) |
             Message::QueryResponse(id, ..) => {
-                self.block.as_mut().unwrap().update(id, message.clone())
+                self.block.as_mut().unwrap().update(id, message.clone(), global)
             }
             Message::KeyPress(_) => {
                 if let Some(id) = &self.monitor_kb {
-                    self.block.as_mut().unwrap().update(id, message.clone())
+                    self.block.as_mut().unwrap().update(id, message.clone(), global)
                 } else if let Some(id) = &self.foreground {
-                    self.block.as_mut().unwrap().update(id, message.clone())
+                    self.block.as_mut().unwrap().update(id, message.clone(), global)
                 } else {
                     Command::none()
                 }
             }
             Message::UIEvent(..) => {
                 if let Some(id) = &self.foreground {
-                    self.block.as_mut().unwrap().update(id, message.clone())
+                    self.block.as_mut().unwrap().update(id, message.clone(), global)
                 } else {
                     Command::none()
                 }
             }
             Message::ActionComplete(id) => {
-                self.complete(id.clone())
+                self.complete(id.clone(), global)
             }
             Message::Interrupt |
             Message::BlockComplete => {
@@ -92,7 +92,7 @@ impl Dispatcher {
         }
     }
 
-    pub fn complete(&mut self, id: ID) -> Command<Message> {
+    pub fn complete(&mut self, id: ID, global: &Global) -> Command<Message> {
         if self.block.is_none() || self.complete.contains(&id) {
             return Command::none();
         }
@@ -118,10 +118,10 @@ impl Dispatcher {
         if let Some(id) = &self.monitor_kb {
             if self.complete.contains(id) { self.monitor_kb = None; }
         }
-        self.next()
+        self.next(global)
     }
 
-    pub fn next(&mut self) -> Command<Message> {
+    pub fn next(&mut self, global: &Global) -> Command<Message> {
         if self.queue.is_empty() && self.active.is_empty() {
             return Command::perform(async {}, |()| Message::BlockComplete)
         }
@@ -165,7 +165,7 @@ impl Dispatcher {
                 self.monitor_kb = Some(id.clone());
             }
             self.queue.remove(&id);
-            let command = block.execute(&id, self.writer.clone());
+            let command = block.execute(&id, self.writer.clone(), global);
             self.active.insert(id);
             commands.push(command);
         }
