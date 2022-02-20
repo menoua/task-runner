@@ -74,12 +74,16 @@ blocks:
       
       - Instruction:
           id: start # The name of this action to be referenced later
-          prompt: Two actions can run simultaneously
+          prompt: Multiple actions can run simultaneously
           timer: 0
       - Audio:
-          id: audio1
+          id: audio-a
           after: [ start ] # Begin action after action "start" ends
           source: resources/block2a.flac
+      - Audio:
+          id: audio-b
+          after: [ start ] # Begin action after action "start" ends
+          source: resources/block2b.wav
       - Question:
           id: question1
           after: [ start ] # This action starts at the same time as "audio1"
@@ -88,8 +92,8 @@ blocks:
                 prompt: Some question
                 options: [ Answer A, Answer B, Answer C ]
       - Instruction:
-          after: [ audio1, question1 ] # After takes a list of action names
-          prompt: This text will only show after the sound is played AND the question answered.
+          after: [ audio-a, audio-b, question1 ] # After takes a list of action names
+          prompt: This text will only show after the sounds are played AND the question answered.
           timer: 0
       
       - Instruction:
