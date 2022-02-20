@@ -65,3 +65,83 @@ blocks:
           timeout: 2 # Stop action after 2 seconds no matter what, applicable to all actions
       - Audio:
           source: resources/block2b.wav
+
+  - title: 3rd Block
+    actions:
+      - Instruction:
+          prompt: This block demonstrates the execution flow of actions
+          timer: 0
+      
+      - Instruction:
+          id: start # The name of this action to be referenced later
+          prompt: Two actions can run simultaneously
+          timer: 0
+      - Audio:
+          id: audio1
+          after: [ start ] # Begin action after action "start" ends
+          source: resources/block2a.flac
+      - Question:
+          id: question1
+          after: [ start ] # This action starts at the same time as "audio1"
+          list:
+            - SingleChoice:
+                prompt: Some question
+                options: [ Answer A, Answer B, Answer C ]
+      - Instruction:
+          after: [ audio1, question1 ] # After takes a list of action names
+          prompt: This text will only show after the sound is played AND the question answered.
+          timer: 0
+      
+      - Instruction:
+          prompt: >
+            An action can also be contained within another one,
+            starting when it starts and ending when it ends.
+            Unless it ends on its own before the parent action.
+          timer: 0
+      - Question:
+          id: question2
+          list:
+            - Slider:
+                prompt: Choose a value between 1 and 5
+                range: [ 1.0, 5.0 ]
+                step: 1.0
+      - Audio:
+          with: question2 # This action will start with "question2" and end no later than it
+          source: resources/block1.wav
+      - Instruction:
+          after: [ question2 ] # After takes a list of action names
+          prompt: This text will show whether or not the audio finished playing.
+          timer: 0
+
+      - Instruction:
+          # When "after" and "with" are omitted, the default behavior is to start after the
+          # previous action (here, the instruction above).
+          id: start2
+          prompt: >
+            These flow elements can be chained together to run multiple streams
+            of actions in parallel. For example, all three sounds will play
+            until the button below is pressed.
+          timer: 0
+      - Audio:
+          id: audio3
+          with: start2
+          source: resources/block1.wav
+      - Audio:
+          id: audio4
+          with: start2
+          after: [ audio3 ]
+          source: resources/block2a.flac
+      - Nothing:
+          id: wait
+          with: start2
+          after: [ audio4 ]
+          timeout: 3
+      - Audio:
+          id: audio5
+          with: start2
+          after: [ wait ]
+          source: resources/block2b.wav
+      - Instruction:
+          id: start2
+          prompt: The End
+          timer: 1
