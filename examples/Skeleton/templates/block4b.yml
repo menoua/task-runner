@@ -1,0 +1,7 @@
+- type: instruction
+  prompt: Two variables
+  timer: 250
+
+- type: instruction
+  prompt: {{a}}, {{b}}
+  timer: 0

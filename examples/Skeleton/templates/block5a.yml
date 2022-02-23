@@ -1,0 +1,12 @@
+- &ref
+  type: template
+  source: block5b
+- *ref
+- *ref
+- *ref
+- *ref
+- *ref
+- *ref
+- *ref
+- *ref
+- *ref

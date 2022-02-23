@@ -1,16 +1,17 @@
 title: Example
 version: 1.0
-description: ~resources/description.txt
+description: < description.txt
 
 # Global user interface options
 # If a subset or all of these features are omitted, the default values will be used
 global:
   window_size: 900 x 780 # Outer size of the program window in pixels
   min_window_size: 800 x 700 # Minimum allowed window size in pixels
-  content_size: 700 x 0.82 # Inner size of content, either as pixels or fraction of outer window
+  content_size: 720 x 0.82 # Inner size of content, either as pixels or fraction of outer window
   resizable: true # Whether to allow resizing the window by user
-  font_scale: 1.0 # Text size scaling, a value between 0.5 and 3.0
+  font_scale: 1.2 # Text size scaling, a value between 0.5 and 3.0
   text_alignment: center # One of left, center, or right
+  debug_ui: false # Draw borders between UI elements (for debugging purposes)
 
 # Task configuration options
 #     All configurations are of form [ value, true/false ]. The value determines the
@@ -18,134 +19,267 @@ global:
 #     that value should be forced. Any configuration items set to false will be
 #     configurable from within the program by the user.
 # 
-# 1. audio -> one of MonoAndTrigger or Stereo
-#     If MonoAndTrigger, for each audio file another one with the same location and
+# 1. audio -> one of mono_and_trigger or stereo
+#     If mono_and_trigger, for each audio file another one with the same location and
 #     name, but .trig.wav extension should be present, which has the same sampling
 #     rate and the same number of samples.
 # 
 # If a subset or all of these features are omitted, the default values will be used
 configuration:
-  audio: [ Stereo, false ]
+  audio: [ stereo, false ]
 
 # A list of experiment blocks, each containing a title and a list of actions to perform
 blocks:
-  - title: 1st Block
+  - title: Basic Elements
     actions:
-      - Instruction:
-          prompt: Press the button every time you hear a beep
-          timer: 3 # Show instruction for a duration of 3 seconds
-      - Audio:
-          source: resources/block1.wav # Location of audio file, relative to task directory
-          background: resources/fixation-cross-small.png # Optional background image
-          monitor_kb: true # Key presses are logged while this audio file is playing
-      - Question:
-          list:
-            - MultiChoice:
-                prompt: Which of the following are colors?
-                options: [ Wind, Track, Blue, Yellow ]
-            - SingleChoice:
-                prompt: "Pick only one option:"
-                options: [ Alpha, Beta, Gamma, Delta ] 
-            - ShortAnswer:
-                prompt: "Write a short sentence:"
-            - Slider:
-                prompt: "Use the slider to pick a number from the range:"
-                range: [ 0.0, 100.0 ]
-                step: 5.0
+      - type: instruction
+        prompt: This is a timed instruction.
+        timer: 3000 # milliseconds
 
-  - title: 2nd Block
+      - type: instruction
+        prompt: "This is an untimed instruction.\nPress the button to continue."
+        timer: 0
+
+      - type: instruction
+        prompt: >
+          The most basic action is `nothing`, which does nothing but is useful in
+          organizing or grouping other actions. All actions, including `nothing`
+          take universal parameters, like  `timeout`, which halts the specified
+          action regardless of anything else. The next action will be a nothing
+          for 2 seconds.
+        timer: 0
+
+      - type: nothing
+        timeout: 2000 # milliseconds
+
+      - type: instruction
+        prompt: "There are two stimulus actions:\n\n* Audio\n\n* Image"
+        timer: 0
+
+      - type: instruction
+        prompt: The audio action plays an audio file from start to finish.
+        timer: 0
+
+      - type: audio
+        source: block1.wav # Relative to "resources" directory
+
+      - type: instruction
+        prompt: |
+          The image action shows a centered image file indefinitely.
+        timer: 0
+
+      - type: image
+        source: fixation-cross-small.png
+        timeout: 1000
+
+      - type: instruction
+        prompt: |
+          Non-visual actions like `audio` can take a `background` parameter that shows
+          a static image while they are active.
+        timer: 0
+
+      - type: audio
+        source: block1.wav
+        background: fixation-cross-small.png # Optional background image
+
+      - type: instruction
+        prompt: |
+          There are three actions for taking subject responses:
+          * Selection
+          * Question
+          * Key presses
+        timer: 0
+
+      - type: selection
+        prompt: A selection is a simple choice whose result is stored in a file.
+        options: [ Option A, Option B, Option C ]
+
+      - type: instruction
+        prompt: A question action is a list of various types of questions.
+        timer: 0
+
+      - type: question
+        list:
+          - type: multi_choice
+            prompt: "This is a multiple choice question:"
+            options: [ Red, Green, Blue, Yellow ]
+          - type: single_choice
+            prompt: "This is a single choice question:"
+            options: [ Alpha, Beta, Gamma, Delta ]
+          - type: short_answer
+            prompt: "This is for arbitrary short answers:"
+          - type: slider
+            prompt: "A slider can be used for selecting from a range"
+            range: [ 0.0, 100.0 ]
+            step: 5.0
+
+      - type: instruction
+        prompt: Key presses can be logged throughout any action, by using the `monitor_kb` parameter.
+        timer: 0
+
+      - type: instruction
+        prompt: Any keys pressed while this instruction is showing will be saved to a file.
+        timer: 5000
+        monitor_kb: true
+
+  - title: Control Flow
     actions:
-      - Instruction:
-          prompt: Press Next to advance
-          timer: 0 # Wait for user to press a button to move on
-      - Audio:
-          source: resources/block2a.flac
-      - Nothing: # This action does not do anything but can be used to organize other actions
-          background: resources/fixation-cross-small.png
-          timeout: 2 # Stop action after 2 seconds no matter what, applicable to all actions
-      - Audio:
-          source: resources/block2b.wav
+      - type: instruction
+        prompt: By default, defined actions run in a sequence, each waiting for the last to finish.
+        timer: 0
 
-  - title: 3rd Block
+      - type: instruction
+        prompt: >
+          Two action parameters `after` and `with` can be used to change this default behavior.
+          
+          
+          `after` specifies a list of actions that have to finish before the current one begins.
+          
+          
+          `with` has two behaviors. If `after` is not specified, the current action will begin
+          with the reference action, and stop at the end of the reference action, unless it ends
+          before that on its own. If `after` is specified, the current action will start regardless
+          of the action in `with`, but its end is limited by the `with` reference.
+        timer: 0
+
+      - id: a1 # An ID is unique to an action in a block, and is used reference an action
+        type: instruction
+        prompt: An audio action is linked to this instruction using `with`.
+        timer: 0
+
+      - type: audio
+        source: block2a.flac
+        with: a1
+
+      - id: b1
+        type: instruction
+        prompt: The next instruction will not show up until BOTH audios finish playing.
+        timer: 2000
+
+      # The following action delays the start of the audios by 1.5 seconds from
+      # the start of the previous instruction.
+      - id: b2
+        type: nothing
+        timeout: 1500
+        with: b1
+
+      - id: b3
+        type: audio
+        source: block2a.flac
+        after: [ b2 ]
+
+      - id: b4
+        type: audio
+        source: block2b.wav
+        after: [ b2 ]
+
+      - type: instruction
+        prompt: Audios have finished playing.
+        timer: 2000
+        after: [ b3, b4 ]
+
+      - type: instruction
+        prompt: >
+          As demonstrated, action flows are controlled asynchronously, so multiple
+          actions can run simultaneously.
+        timer: 0
+
+  - title: Advanced Features
     actions:
-      - Instruction:
-          prompt: This block demonstrates the execution flow of actions
-          timer: 0
-      
-      - Instruction:
-          id: start # The name of this action to be referenced later
-          prompt: Multiple actions can run simultaneously
-          timer: 0
-      - Audio:
-          id: audio-a
-          after: [ start ] # Begin action after action "start" ends
-          source: resources/block2a.flac
-      - Audio:
-          id: audio-b
-          after: [ start ] # Begin action after action "start" ends
-          source: resources/block2b.wav
-      - Question:
-          id: question1
-          after: [ start ] # This action starts at the same time as "audio1"
-          list:
-            - SingleChoice:
-                prompt: Some question
-                options: [ Answer A, Answer B, Answer C ]
-      - Instruction:
-          after: [ audio-a, audio-b, question1 ] # After takes a list of action names
-          prompt: This text will only show after the sounds are played AND the question answered.
-          timer: 0
-      
-      - Instruction:
-          prompt: >
-            An action can also be contained within another one,
-            starting when it starts and ending when it ends.
-            Unless it ends on its own before the parent action.
-          timer: 0
-      - Question:
-          id: question2
-          list:
-            - Slider:
-                prompt: Choose a value between 1 and 5
-                range: [ 1.0, 5.0 ]
-                step: 1.0
-      - Audio:
-          with: question2 # This action will start with "question2" and end no later than it
-          source: resources/block1.wav
-      - Instruction:
-          after: [ question2 ] # After takes a list of action names
-          prompt: This text will show whether or not the audio finished playing.
-          timer: 0
+      - type: instruction
+        prompt: >
+          The task specification is done in YAML, so most YAML features will
+          work in this context.
+        timer: 0
 
-      - Instruction:
-          # When "after" and "with" are omitted, the default behavior is to start after the
-          # previous action (here, the instruction above).
-          id: start2
-          prompt: >
-            These flow elements can be chained together to run multiple streams
-            of actions in parallel. For example, all three sounds will play
-            until the button below is pressed.
-          timer: 0
-      - Audio:
-          id: audio3
-          with: start2
-          source: resources/block1.wav
-      - Audio:
-          id: audio4
-          with: start2
-          after: [ audio3 ]
-          source: resources/block2a.flac
-      - Nothing:
-          id: wait
-          with: start2
-          after: [ audio4 ]
-          timeout: 3
-      - Audio:
-          id: audio5
-          with: start2
-          after: [ wait ]
-          source: resources/block2b.wav
-      - Instruction:
-          prompt: The End
-          after: [ start2 ]
-          timer: 1
+      - type: instruction
+        prompt: >
+          For example, YAML supports anchors (&) and references (*), which allows to
+          reuse an element by anchoring the first definition and reusing it using a *.
+        timer: 0
+
+      - &ref_A # This sets a reference to an action
+        type: audio
+        source: block3a.wav
+
+      - &ref_B
+        type: audio
+        source: block3b.wav
+
+      - *ref_B
+      - *ref_A
+
+      - type: instruction
+        prompt: >
+          Note: Be careful when using this type of reference if the anchored element
+          has specified `id`, `with`, or `after`, because they will be copied exactly,
+          which is probably not what you want.
+        timer: 0
+
+      - type: instruction
+        prompt: >
+          A more advanced YAML reusing and packaging is implemented using the template
+          action. A template action takes a `source` parameter that is the name of the
+          template YAML file.
+          
+          
+          The next action is a static template defined in a separate file.
+        timer: 0
+
+      - type: template
+        source: block4a
+
+      - type: instruction
+        prompt: >
+          The template action can also take arguments that replace the parameters in the form
+          of {{param_name}} with a specified string value.
+        timer: 0
+
+      - type: template
+        source: block4b
+        params: # Expanded style of writing a YAML mapping
+          a: "52"
+          b: Sensory
+
+      - type: instruction
+        prompt: The same template can be called multiple times with different parameter values.
+        timer: 0
+
+      - id: t1
+        type: template
+        source: block4c
+        params: { i: a, j: block3b.wav } # In-line style of writing a YAML mapping
+
+      - type: template
+        source: block4c
+        params: { i: b, j: block3a.wav }
+        after: [ t1 ] # Template actions support after/with like any other action type
+
+      - type: instruction
+        prompt: A template can include other (nested) templates, up to three levels.
+        timer: 0
+
+      - type: template
+        source: block4d
+        params: { b: Cortex }
+
+  - title: Overhead Test
+    actions:
+      - &ref
+        type: template
+        source: block5a
+      - *ref
+      - &wait
+        type: nothing
+        timeout: 22050
+      - *ref
+      - *ref
+      - *wait
+      - *ref
+      - *ref
+      - *wait
+      - *ref
+      - *ref
+      - *wait
+      - *ref
+      - *ref

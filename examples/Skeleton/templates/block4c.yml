@@ -1,0 +1,9 @@
+- type: instruction
+  prompt: Two audio files
+  timer: 500
+
+- type: audio
+  source: block3{{i}}.wav
+
+- type: audio
+  source: {{j}}

@@ -1,0 +1,6 @@
+- type: template
+  source: block4a
+
+- type: template
+  source: block4b
+  params: { a: "7", b: {{b}} }

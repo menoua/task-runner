@@ -1,0 +1,7 @@
+- type: instruction
+  prompt: Something
+  timer: 750
+
+- type: instruction
+  prompt: Something else
+  timer: 750

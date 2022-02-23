@@ -1,0 +1,19 @@
+- &ref_A
+  type: audio
+  source: block3a.wav
+- &ref_B
+  type: audio
+  source: block3b.wav
+  background: fixation-cross-small.png
+
+- *ref_A
+- *ref_B
+
+- *ref_A
+- *ref_B
+
+- *ref_A
+- *ref_B
+
+- *ref_A
+- *ref_B
