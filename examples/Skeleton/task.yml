@@ -33,12 +33,11 @@ blocks:
   - title: Basic Elements
     actions:
       - type: instruction
-        prompt: This is a timed instruction.
-        timer: 3000 # milliseconds
+        prompt: "This is an untimed instruction.\nPress the button to continue."
 
       - type: instruction
-        prompt: "This is an untimed instruction.\nPress the button to continue."
-        timer: 0
+        prompt: This is a timed instruction.
+        timer: 3000 # milliseconds
 
       - type: instruction
         prompt: >
@@ -47,18 +46,15 @@ blocks:
           take universal parameters, like  `timeout`, which halts the specified
           action regardless of anything else. The next action will be a nothing
           for 2 seconds.
-        timer: 0
 
       - type: nothing
         timeout: 2000 # milliseconds
 
       - type: instruction
         prompt: "There are two stimulus actions:\n\n* Audio\n\n* Image"
-        timer: 0
 
       - type: instruction
         prompt: The audio action plays an audio file from start to finish.
-        timer: 0
 
       - type: audio
         source: block1.wav # Relative to "resources" directory
@@ -66,7 +62,6 @@ blocks:
       - type: instruction
         prompt: |
           The image action shows a centered image file indefinitely.
-        timer: 0
 
       - type: image
         source: fixation-cross-small.png
@@ -76,7 +71,6 @@ blocks:
         prompt: |
           Non-visual actions like `audio` can take a `background` parameter that shows
           a static image while they are active.
-        timer: 0
 
       - type: audio
         source: block1.wav
@@ -88,7 +82,6 @@ blocks:
           * Selection
           * Question
           * Key presses
-        timer: 0
 
       - type: selection
         prompt: A selection is a simple choice whose result is stored in a file.
@@ -96,7 +89,6 @@ blocks:
 
       - type: instruction
         prompt: A question action is a list of various types of questions.
-        timer: 0
 
       - type: question
         list:
@@ -115,7 +107,6 @@ blocks:
 
       - type: instruction
         prompt: Key presses can be logged throughout any action, by using the `monitor_kb` parameter.
-        timer: 0
 
       - type: instruction
         prompt: Any keys pressed while this instruction is showing will be saved to a file.
@@ -126,7 +117,6 @@ blocks:
     actions:
       - type: instruction
         prompt: By default, defined actions run in a sequence, each waiting for the last to finish.
-        timer: 0
 
       - type: instruction
         prompt: >
@@ -140,12 +130,10 @@ blocks:
           with the reference action, and stop at the end of the reference action, unless it ends
           before that on its own. If `after` is specified, the current action will start regardless
           of the action in `with`, but its end is limited by the `with` reference.
-        timer: 0
 
       - id: a1 # An ID is unique to an action in a block, and is used reference an action
         type: instruction
         prompt: An audio action is linked to this instruction using `with`.
-        timer: 0
 
       - type: audio
         source: block2a.flac
@@ -182,7 +170,6 @@ blocks:
         prompt: >
           As demonstrated, action flows are controlled asynchronously, so multiple
           actions can run simultaneously.
-        timer: 0
 
   - title: Advanced Features
     actions:
@@ -190,13 +177,11 @@ blocks:
         prompt: >
           The task specification is done in YAML, so most YAML features will
           work in this context.
-        timer: 0
 
       - type: instruction
         prompt: >
           For example, YAML supports anchors (&) and references (*), which allows to
           reuse an element by anchoring the first definition and reusing it using a *.
-        timer: 0
 
       - &ref_A # This sets a reference to an action
         type: audio
@@ -214,7 +199,6 @@ blocks:
           Note: Be careful when using this type of reference if the anchored element
           has specified `id`, `with`, or `after`, because they will be copied exactly,
           which is probably not what you want.
-        timer: 0
 
       - type: instruction
         prompt: >
@@ -224,7 +208,6 @@ blocks:
           
           
           The next action is a static template defined in a separate file.
-        timer: 0
 
       - type: template
         source: block4a
@@ -233,7 +216,6 @@ blocks:
         prompt: >
           The template action can also take arguments that replace the parameters in the form
           of {{param_name}} with a specified string value.
-        timer: 0
 
       - type: template
         source: block4b
@@ -243,7 +225,6 @@ blocks:
 
       - type: instruction
         prompt: The same template can be called multiple times with different parameter values.
-        timer: 0
 
       - id: t1
         type: template
@@ -257,18 +238,19 @@ blocks:
 
       - type: instruction
         prompt: A template can include other (nested) templates, up to three levels.
-        timer: 0
 
       - type: template
         source: block4d
         params: { b: Cortex }
 
-  # This 500-action block is for gauging the overhead imposed by the program
+  # This block is for meant for gauging the overhead imposed by the program
   # on the task, in terms of delays added in between action transitions, etc.
-  # Running the block on a 2019 MacBook Pro with an 8-Core Intel Core i9 CPU,
-  # the average delay added per action is sub-millisecond.
   - title: Overhead Test
     actions:
+      # The following defines 500+ short actions that transition at a rate
+      # of about 1.6Hz. Running the block on a 2019 MacBook Pro with an
+      # 8-Core Intel Core i9 CPU, the average delay added per action is
+      # sub-millisecond.
       - &ref
         type: template
         source: block5a
@@ -287,3 +269,25 @@ blocks:
       - *wait
       - *ref
       - *ref
+
+      # The following actions which start simultaneously with the above,
+      # are meant to measure the temporal precision of timed activities
+      # while the program is under heavy load. The following lines define
+      # 10 countdowns counting 1 minute simultaneously, in 1 sec intervals
+      # Running on a 2019 MacBook Pro with an 8-Core Intel Core i9 CPU,
+      # the average delay added to the waits was ~3.3 ms per interval step,
+      # for a total of ~200 ms per 1 minute, about 0.33%.
+      - &wait
+        type: instruction
+        prompt: ""
+        timer: 60000 # 1 min = 60 secs = 60_000 millisecs
+        after: []
+      - *wait
+      - *wait
+      - *wait
+      - *wait
+      - *wait
+      - *wait
+      - *wait
+      - *wait
+      - *wait
