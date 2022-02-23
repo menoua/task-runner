@@ -990,9 +990,14 @@ pub mod flow {
             }
         };
 
+        let mut finalists: HashSet<ID> = actions.iter().map(Action::id).collect();
+
         for action in actions.iter_mut() {
             let inner_info = action.info_mut();
             if let Some(after) = &mut inner_info.after {
+                for x in after.iter() {
+                    finalists.remove(x);
+                }
                 after.insert("entry".to_string());
             }
             if inner_info.with.is_none() {
@@ -1004,7 +1009,7 @@ pub mod flow {
             info: Info {
                 id: "exit".to_string(),
                 with: with.clone(),
-                after: Some(actions.iter().map(Action::id).collect()),
+                after: Some(finalists),
                 monitor_kb: false,
                 keystrokes: vec![],
                 background: None,
