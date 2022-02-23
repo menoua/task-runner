@@ -263,6 +263,10 @@ blocks:
         source: block4d
         params: { b: Cortex }
 
+  # This 500-action block is for gauging the overhead imposed by the program
+  # on the task, in terms of delays added in between action transitions, etc.
+  # Running the block on a 2019 MacBook Pro with an 8-Core Intel Core i9 CPU,
+  # the average delay added per action is sub-millisecond.
   - title: Overhead Test
     actions:
       - &ref
