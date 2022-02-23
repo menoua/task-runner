@@ -1,6 +1,6 @@
 # neurotask
 
-A Rust-based cross-platform task creation toolbox for (auditory) neuroscience research.
+A Rust-based, cross-platform, and low-delay task creation tool for (auditory) neuroscience research.
 
 **!!! Highly experimental. Use at your own risk. !!!**
 
@@ -14,7 +14,7 @@ Use cargo to download dependencies and compile package: `cd neurotask && cargo b
 
 The resulting binary will be located at `./target/release/neurotask` for macOS and Linux, and `./target/release/neurotask` for Windows.
 
-## Compiled bianries
+## Using compiled binaries
 
 Compiled binaries are provided for macOS, Linux, and Windows in [bin](https://github.com/menoua/neurotask/tree/main/bin).
 
