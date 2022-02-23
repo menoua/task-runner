@@ -1,5 +1,5 @@
 [package]
-name = "neurotask"
+name = "task-runner"
 version = "0.2.0"
 edition = "2021"
 

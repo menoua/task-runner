@@ -2,15 +2,15 @@ use std::env;
 use std::path::PathBuf;
 use iced::{Application, Settings, window};
 
-use neurotask::app::App;
-use neurotask::task::Task;
+use task_runner::app::App;
+use task_runner::task::Task;
 
 fn main() -> Result<(), String> {
     let args = env::args();
     let task_dir = match args.len() {
         1 => env::current_exe().unwrap().parent().unwrap().to_path_buf(),
         2 => PathBuf::from(args.skip(1).next().unwrap()),
-        _ => panic!("Usage example: neurotask [task_dir]"),
+        _ => panic!("Usage example: ./task-runner [task_dir]"),
     };
     let task = Task::new(task_dir)?;
     let global = task.global();
