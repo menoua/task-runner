@@ -66,11 +66,6 @@ impl Config {
             .push(e_start))
     }
 
-    pub fn reset(&mut self, global: &Global) {
-        let config = global.config();
-        self.audio.0 = config.audio.0;
-    }
-
     pub fn update(&mut self, code: Code, value: Value) {
         match (code, value) {
             (0x04, Value::Integer(i)) => {
