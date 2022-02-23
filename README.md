@@ -1,4 +1,4 @@
-# neurotask
+# task-runner
 
 A Rust-based, cross-platform and low-delay task creation tool for (auditory) neuroscience research.
 
@@ -8,26 +8,26 @@ A Rust-based, cross-platform and low-delay task creation tool for (auditory) neu
 
 Install [Cargo](https://doc.rust-lang.org/cargo/getting-started/installation.html). (*On Windows, Cargo requires C++ build tools and the Windows SDK.*)
 
-Clone repository: `git clone https://github.com/menoua/neurotask`
+Clone repository: `git clone https://github.com/menoua/task-runner`
 
-Use cargo to download dependencies and compile package: `cd neurotask && cargo build --release`
+Use cargo to download dependencies and compile package: `cd task-runner && cargo build --release`
 
-The resulting binary will be located at `target/release/neurotask` for macOS and Linux, and `target\release\neurotask.exe` for Windows.
+The resulting binary will be located at `target/release/task-runner` for macOS and Linux, and `target\release\task-runner.exe` for Windows.
 
 ## Using compiled binaries
 
-Compiled binaries are provided for macOS and Linux in [bin](https://github.com/menoua/neurotask/tree/main/bin).
+Compiled binaries are provided for macOS and Linux in [bin](https://github.com/menoua/task-runner/tree/main/bin).
 
 ## Usage
 
 The simplest usage is to put the appropriate binary file in the task directory (see below) and run it, whether by double-clicking (macOS and Windows) or running it from the terminal (macOS, Linux, and Windows).
 
 To avoid having a separate copy of the binaries for each task, you can use an argument to specify the task directory, e.g.:<br/>
-`bin/neurotask-macos examples/Skeleton`.
+`bin/task-runner-macos examples/Skeleton`.
 
 ## Task directory
 
-A task directory is a directory that contains a `task.yml` file and any additional files that are needed to run the task (audio, image, etc.). The `task.yml` file should be in valid YAML format and defines the structure of the task to be run. Look at the very basic [Skeletion](https://github.com/menoua/neurotask/tree/main/examples/Skeleton) example to see what a task definition file should look like.
+A task directory is a directory that contains a `task.yml` file and any additional files that are needed to run the task (audio, image, etc.). The `task.yml` file should be in valid YAML format and defines the structure of the task to be run. Look at the very basic [Skeletion](https://github.com/menoua/task-runner/tree/main/examples/Skeleton) example to see what a task definition file should look like.
 
 ## Troubleshooting
 
