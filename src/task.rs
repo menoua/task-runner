@@ -48,7 +48,9 @@ enum State {
     Startup {
         handles: [button::State; 2]
     },
-    Configure,
+    Configure {
+        config: Config,
+    },
     Selection {
         handles: [button::State; 64],
     },
@@ -125,7 +127,9 @@ impl Task {
             Message::UIEvent(code, value) => {
                 match (state, code, value.clone()) {
                     (State::Startup { .. }, 0x01, _) => {
-                        self.state = State::Configure;
+                        self.state = State::Configure {
+                            config: self.configuration.clone(),
+                        };
                         Command::none()
                     }
                     (State::Startup { .. }, 0x02, _) => {
@@ -138,29 +142,29 @@ impl Task {
                             .expect("Failed to write task configuration log to file");
                         Command::none()
                     }
-                    (State::Configure, 0x01, _) => {
-                        self.configuration.reset();
+                    (State::Configure { .. }, 0x01, _) => {
                         self.state = State::Startup {
                             handles: [button::State::new(); 2]
                         };
                         Command::none()
                     }
-                    (State::Configure, 0x02, _) => {
-                        self.configuration.reset();
+                    (State::Configure { config, .. }, 0x02, _) => {
+                        *config = self.configuration.clone();
                         Command::none()
                     }
-                    (State::Configure, 0x03, _) => {
+                    (State::Configure { config, .. }, 0x03, _) => {
+                        self.configuration = config.clone();
+                        self.global.set_config(&self.configuration);
                         self.state = State::Selection {
                             handles: [button::State::new(); 64],
                         };
-                        self.global.set_config(&self.configuration);
                         let file = File::create(Path::new(&self.log_dir).join("task.log")).unwrap();
                         serde_yaml::to_writer(file, &self)
                             .expect("Failed to write task configuration log to file");
                         Command::none()
                     }
-                    (State::Configure, _, _) => {
-                        self.configuration.update(code, value);
+                    (State::Configure { config, .. }, _, _) => {
+                        config.update(code, value);
                         Command::none()
                     }
                     (State::Selection { .. }, i, Value::Null) => {
@@ -201,7 +205,6 @@ impl Task {
                         Command::none()
                     },
                     State::Configure { .. } => {
-                        self.configuration.reset();
                         self.state = State::Startup {
                             handles: [button::State::new(); 2]
                         };
@@ -325,8 +328,8 @@ impl Task {
                     .into()
             }
 
-            State::Configure => {
-                self.configuration.view(&self.global)
+            State::Configure { config,.. } => {
+                config.view(&self.global)
             }
 
             State::Selection { handles, .. } => {
