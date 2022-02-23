@@ -143,6 +143,7 @@ blocks:
         type: instruction
         prompt: The next instruction will not show up until BOTH audios finish playing.
         timer: 2000
+        after: [ a1 ]
 
       # The following action delays the start of the audios by 1.5 seconds from
       # the start of the previous instruction.
