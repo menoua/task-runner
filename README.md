@@ -16,7 +16,7 @@ The resulting binary will be located at `target/release/neurotask` for macOS and
 
 ## Using compiled binaries
 
-Compiled binaries are provided for macOS, Linux, and Windows in [bin](https://github.com/menoua/neurotask/tree/main/bin).
+Compiled binaries are provided for macOS and Linux in [bin](https://github.com/menoua/neurotask/tree/main/bin).
 
 ## Usage
 
@@ -35,6 +35,6 @@ A task directory is a directory that contains a `task.yml` file and any addition
 
 * Linux-only: If the binary fails to startup with the message `GraphicsAdapterNotFound`, you are missing the Vulkan library files. For example, on Ubuntu you can get them using: `sudo apt-get install libvulkan1`
 
-* Windows-only: The current Windows binary is not quite stable. I have to look into it at some point.
+* Windows-only: Currently, the Windows binary is not quite stable. I have to look into it at some point.
 
 * For some reason, on some speakers the left-right speaker channels are flipped. However, this behavior is consistent with the same device, so as long as you determine once which is which for a device there shouldn't be any problems going forward.
