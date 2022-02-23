@@ -38,7 +38,7 @@ pub struct Info {
     #[serde(skip)]
     background_image: Option<image::Handle>,
     #[serde(default, skip_serializing_if="Option::is_none")]
-    timeout: Option<u16>,
+    timeout: Option<u32>,
     #[serde(skip)]
     dependents: HashSet<ID>,
     #[serde(skip)]
@@ -48,7 +48,7 @@ pub struct Info {
     #[serde(skip)]
     log_prefix: String,
     #[serde(skip)]
-    comm: Option<Sender>,
+    comm: Vec<Sender>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -63,7 +63,7 @@ pub enum Action {
     Instruction {
         prompt: String,
         #[serde(default="default::timer")]
-        timer: u16,
+        timer: u32,
         #[serde(default, flatten)]
         info: Info,
         #[serde(skip)]
@@ -489,12 +489,11 @@ impl Action {
         self.info_mut().log_prefix = output(log_dir, &self.id());
 
         let mut commands = vec![];
-        if let Some(t) = self.info().timeout {
-            let id = self.id();
-            commands.push(Command::perform(async move {
-                std::thread::sleep(Duration::from_millis(t as u64));
-                Message::ActionComplete(id)
-            }, |msg| msg));
+        if let Some(timer) = self.info().timeout {
+            let rx = self.new_comm_link();
+            commands.push(Command::perform(
+                run::interruptible_timer(self.id(), (writer.clone(), rx), timer),
+                |msg| msg));
         }
 
         match self {
@@ -503,7 +502,7 @@ impl Action {
                     let timer = timer.clone();
                     let rx = self.new_comm_link();
                     commands.push(Command::perform(
-                        run::instruction(self.id(), (writer, rx), timer),
+                        run::interruptible_timer(self.id(), (writer, rx), timer),
                         |msg| msg));
                 }
             }
@@ -648,12 +647,12 @@ impl Action {
         }
 
         match self {
-            Action::Audio { info, .. } => {
+            Action::Audio { .. } => {
                 match message {
-                    Message::QueryResponse(..) => {
-                        info.comm.as_mut().unwrap().send(message.clone()).ok();
-                        Command::none()
-                    }
+                    // Message::QueryResponse(..) => {
+                    //     info.comm.as_mut().unwrap().send(message.clone()).ok();
+                    //     Command::none()
+                    // }
                     _ => {
                         panic!("{:?}", message);
                     }
@@ -712,7 +711,7 @@ impl Action {
                 info.keystrokes.clone(),
                 "Failed to write key presses to output file");
         }
-        if let Some(comm) = &info.comm {
+        for comm in &info.comm {
             comm.send(Message::Wrap).ok();
         }
 
@@ -735,7 +734,7 @@ impl Action {
 
     pub fn new_comm_link(&mut self) -> Receiver {
         let (tx, rx) = mpsc::channel();
-        self.info_mut().comm = Some(tx);
+        self.info_mut().comm.push(tx);
         rx
     }
 }
@@ -876,9 +875,10 @@ pub mod run {
     use rodio::OutputStreamHandle;
     use super::*;
 
-    pub async fn instruction(id: ID, comm: Comm, mut timer: u16) -> Message {
+    pub async fn interruptible_timer(id: ID, comm: Comm, mut timer: u32) -> Message {
         while timer > 0 {
-            std::thread::sleep(Duration::from_millis(1));
+            let t = if timer >= 1000 { 1000 } else { timer };
+            std::thread::sleep(Duration::from_millis(t as u64));
             match comm.1.try_recv() {
                 Ok(Message::Wrap) |
                 Ok(Message::Interrupt) |
@@ -888,7 +888,7 @@ pub mod run {
                 Err(TryRecvError::Empty) => (),
                 Ok(msg) => panic!("Unexpected message received: {:?}", msg),
             }
-            timer -= 1;
+            timer -= t;
         }
         Message::ActionComplete(id)
     }
@@ -907,8 +907,8 @@ pub mod run {
 mod default {
     use super::*;
 
-    pub fn timer() -> u16 {
-        3_000
+    pub fn timer() -> u32 {
+        0
     }
 
     pub fn slider_range() -> RangeInclusive<f32> {
@@ -986,7 +986,7 @@ pub mod flow {
                 successors: Default::default(),
                 expired: Some(true),
                 log_prefix: "".to_string(),
-                comm: None
+                comm: vec![]
             }
         };
 
@@ -1019,7 +1019,7 @@ pub mod flow {
                 successors: Default::default(),
                 expired: Some(true),
                 log_prefix: "".to_string(),
-                comm: None
+                comm: vec![]
             }
         };
 

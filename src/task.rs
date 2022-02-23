@@ -169,11 +169,11 @@ impl Task {
                     }
                     (State::Selection { .. }, i, Value::Null) => {
                         self.state = State::Starting {
-                            wait_for: 30
+                            wait_for: 3000
                         };
                         Command::perform(async {
                             std::thread::sleep(Duration::from_millis(100));
-                        }, move |()| Message::UIEvent(i, Value::Integer(29)))
+                        }, move |()| Message::UIEvent(i, Value::Integer(2900)))
                     }
                     (State::Starting { .. }, i, Value::Integer(0)) => {
                         self.state = State::Started;
@@ -183,7 +183,7 @@ impl Task {
                         *wait_for = t.clone() as u16;
                         Command::perform(async {
                             std::thread::sleep(Duration::from_millis(100));
-                        }, move |()| Message::UIEvent(i, Value::Integer(t - 1)))
+                        }, move |()| Message::UIEvent(i, Value::Integer(t - 100)))
                     }
                     (State::Started { .. }, _, _) if is_active => {
                         self.dispatcher.as_mut().unwrap()
@@ -387,7 +387,7 @@ impl Task {
                     .align_items(Align::Center)
                     .push(Space::with_height(Length::Fill))
                     .push(Text::new(
-                        format!("Starting block in {}...", (*wait_for as f32/10.0).ceil() as u16))
+                        format!("Starting block in {}...", (*wait_for+999)/1000))
                         .size(self.global.text_size("XLARGE")))
                     .push(Space::with_height(Length::Fill))
             }
