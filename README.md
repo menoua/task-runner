@@ -1,8 +1,8 @@
 # neurotask
 
-A Rust-based, cross-platform, and low-delay task creation tool for (auditory) neuroscience research.
+A Rust-based, cross-platform and low-delay task creation tool for (auditory) neuroscience research.
 
-**!!! Highly experimental. Use at your own risk. !!!**
+***!!! Highly experimental. API subject to frequent change. Use at your own risk. !!!***
 
 ## Compiling from source
 
