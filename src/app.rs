@@ -78,6 +78,7 @@ impl Application for App {
     }
 
     fn view(&mut self) -> Element<Message> {
+        let debug_ui = self.task.global().debug_ui();
         let (inner_x, inner_y) = self.task.global().content_size();
 
         let content = match inner_x {
@@ -117,6 +118,10 @@ impl Application for App {
             .center_y()
             .into();
 
-        content//.explain(Color::BLACK)
+        if debug_ui {
+            content.explain(iced::Color::BLACK)
+        } else {
+            content
+        }
     }
 }

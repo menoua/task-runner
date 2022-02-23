@@ -43,7 +43,7 @@ impl Dispatcher {
     pub fn init(&mut self, block: Block, global: &Global) -> Command<Message> {
         self.queue = HashSet::from_iter(block.actions());
         self.block = Some(block);
-        self.next(global)
+        self.next(HashSet::from(["entry".to_string()]), global)
     }
 
     pub fn update(&mut self, message: Message, global: &Global) -> Command<Message> {
@@ -98,15 +98,20 @@ impl Dispatcher {
         }
         let block = self.block.as_mut().unwrap();
 
-        self.active.remove(&id);
-        self.complete.insert(id.clone());
-        block.wrap(&id);
-        for dependent in block.dependents(&id) {
-            if self.active.contains(&dependent) {
-                self.active.remove(&dependent);
-                self.complete.insert(dependent.clone());
-                block.wrap(&dependent);
+        let mut ready = HashSet::new();
+        let mut expired = HashSet::from([id]);
+        while !expired.is_empty() {
+            let mut new_expired = HashSet::new();
+            for id in expired {
+                if self.active.contains(&id) {
+                    self.active.remove(&id);
+                    self.complete.insert(id.clone());
+                    let (ready2, expired2) = block.wrap(&id);
+                    ready.extend(ready2);
+                    new_expired.extend(expired2);
+                }
             }
+            expired = new_expired;
         }
 
         if let Some(id) = &self.foreground {
@@ -118,72 +123,59 @@ impl Dispatcher {
         if let Some(id) = &self.monitor_kb {
             if self.complete.contains(id) { self.monitor_kb = None; }
         }
-        self.next(global)
+        self.next(ready, global)
     }
 
-    pub fn next(&mut self, global: &Global) -> Command<Message> {
-        if self.queue.is_empty() && self.active.is_empty() {
-            return Command::perform(async {}, |()| Message::BlockComplete)
-        }
+    pub fn next(&mut self, mut ready: HashSet<ID>, global: &Global) -> Command<Message> {
         let block = self.block.as_mut().unwrap();
-
-        let mut ready = HashSet::new();
-        let mut done = false;
-        while !done {
-            done = true;
-            ready = self.queue
-                .iter()
-                .filter(|id| block.is_ready(id, &self.complete).unwrap_or(false))
-                .cloned()
-                .collect();
-
-            for id in ready.iter() {
-                if block.is_expired(id, &self.complete).unwrap_or(false) {
-                    self.queue.remove(id);
-                    self.complete.insert(id.clone());
-                    block.skip(id);
-                    done = false;
-                }
-            }
-        }
-
-        let mut done = false;
-        while !done {
-            done = true;
-            for id in ready.clone().iter() {
-                for dependent in block.dependents(id) {
-                    if self.queue.contains(&dependent) &&
-                        !ready.contains(&dependent) &&
-                        block.is_ready(&dependent, &self.complete).unwrap_or(true)
-                    {
-                        ready.insert(dependent);
-                        done = false;
-                    }
-                }
-            }
-        }
-
-        if self.active.is_empty() && !self.queue.is_empty() && ready.is_empty() {
-            panic!("Action queue is not empty, but none ready to start")
-        }
-
         let mut commands = vec![];
-        for id in ready {
-            if block.has_view(&id) {
-                self.foreground = Some(id.clone());
+        while !ready.is_empty() {
+            let mut new_ready = HashSet::new();
+            for id in ready {
+                if block.is_expired(&id).unwrap_or(false) {
+                    let mut expired = HashSet::from([id.clone()]);
+                    while !expired.is_empty() {
+                        for x in expired {
+                            self.queue.remove(&x);
+                            self.complete.insert(x);
+                        }
+                        let (ready2, expired2) = block.skip(&id);
+                        new_ready.extend(ready2);
+                        expired = expired2;
+                    }
+                } else {
+                    if block.has_view(&id) {
+                        self.foreground = Some(id.clone());
+                    }
+                    if block.has_background(&id) {
+                        self.background = Some(id.clone());
+                    }
+                    if block.captures_keystrokes(&id) {
+                        self.monitor_kb = Some(id.clone());
+                    }
+                    for dep in block.dependents(&id).to_owned() {
+                        if block.is_ready(&dep).unwrap_or(true) {
+                            new_ready.insert(dep);
+                        }
+                    }
+                    self.queue.remove(&id);
+                    let command = block.execute(&id, self.writer.clone(), global);
+                    self.active.insert(id);
+                    commands.push(command);
+                }
             }
-            if block.has_background(&id) {
-                self.background = Some(id.clone());
-            }
-            if block.captures_keystrokes(&id) {
-                self.monitor_kb = Some(id.clone());
-            }
-            self.queue.remove(&id);
-            let command = block.execute(&id, self.writer.clone(), global);
-            self.active.insert(id);
-            commands.push(command);
+            ready = new_ready;
         }
-        Command::batch(commands)
+
+        if !commands.is_empty() {
+            Command::batch(commands)
+        } else if !self.active.is_empty() {
+            Command::none()
+        } else if self.queue.is_empty() {
+            Command::perform(async {}, |()| Message::BlockComplete)
+        } else {
+            panic!("Arrived at a deadlock; unable to reach some actions")
+        }
     }
 
     pub fn wrap_unfinished(&mut self) {

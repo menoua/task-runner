@@ -90,6 +90,7 @@ impl Config {
 }
 
 #[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Copy, Clone)]
+#[serde(rename_all = "snake_case")]
 pub enum AudioConfig {
     MonoAndTrigger,
     Stereo,

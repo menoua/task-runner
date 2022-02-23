@@ -9,13 +9,11 @@ use std::time::Duration;
 use crate::comm::{Comm, Message};
 
 pub fn play_audio(comm: Comm, src: &Path, trigger: Option<&Path>, stream_handle: OutputStreamHandle) -> Result<(), ()> {
-    // let (_stream, stream_handle) =
-    //     OutputStream::try_default().expect("Failed to open output stream");
-
     let sink = Sink::try_new(&stream_handle)
         .expect("Failed to open sink stream");
 
-    let file = BufReader::new(File::open(src).unwrap());
+    let file = BufReader::new(File::open(src)
+        .expect(&format!("File not found: {:?}", src)));
     let source = Decoder::new(file).unwrap();
 
     match trigger {

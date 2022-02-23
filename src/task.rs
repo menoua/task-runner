@@ -1,4 +1,5 @@
 use std::env;
+use std::fmt::Debug;
 use std::fs::File;
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -12,7 +13,7 @@ use crate::comm::{Message, Value};
 use crate::config::Config;
 use crate::dispatch::Dispatcher;
 use crate::style::{self, button};
-use crate::util::timestamp;
+use crate::util::{resource, timestamp};
 use crate::global::Global;
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -26,6 +27,8 @@ pub struct Task {
     configuration: Config,
     #[serde(default)]
     blocks: Vec<Block>,
+    #[serde(default)]
+    global: Global,
     #[serde(skip)]
     progress: Vec<bool>,
     #[serde(skip)]
@@ -34,8 +37,6 @@ pub struct Task {
     state: State,
     #[serde(skip)]
     log_dir: String,
-    #[serde(default)]
-    global: Global,
     #[serde(skip)]
     events: Vec<String>,
     #[serde(skip)]
@@ -66,34 +67,37 @@ impl Default for State {
 }
 
 impl Task {
-    pub fn new(task_dir: PathBuf) -> Self {
+    pub fn new(task_dir: PathBuf) -> Result<Self, String> {
         let file = task_dir.join("task.yml");
-        let file = File::open(file)
-            .expect("Failed to open YAML file");
+        let file = File::open(&file)
+            .or(Err(format!("Failed to open YAML file: {:?}", file)))?;
         let mut task: Task = serde_yaml::from_reader(file)
-            .expect("Failed to read YAML file.");
+            .or_else(|e| Err(format!(
+                "Failed to read YAML file at line {}: {}",
+                e.location().unwrap().line(), e)))?;
 
-        if task.description.starts_with("~") {
-            let file = task_dir.join(&task.description[1..]);
+        if task.description.starts_with("<") {
+            let file = resource(&task_dir, &task.description[1..].trim())?;
             let mut file = File::open(file)
-                .expect("Failed to open task description file");
-            task.description = String::new();
+                .or(Err("Failed to open task description file".to_string()))?;
+            task.description.clear();
             file.read_to_string(&mut task.description)
-                .expect("Failed to read task description file");
+                .or(Err("Failed to read task description file".to_string()))?;
         }
 
         let name = format!("session-{}", timestamp());
-        task.log_dir = task_dir.join("output").join(name).to_str().unwrap().to_string();
+        task.log_dir = task_dir.join("output")
+            .join(name).to_str().unwrap().to_string();
         std::fs::create_dir_all(&task.log_dir)
-            .expect("Failed to create output directory for task");
+            .or(Err("Failed to create output directory for task".to_string()))?;
 
         for (i, block) in task.blocks.iter_mut().enumerate() {
-            block.init(i+1, &task_dir);
+            block.init(i+1, &task_dir)?;
         }
         task.progress = vec![false; task.blocks.len()];
 
         task.global.set_dir(task_dir.to_str().unwrap());
-        task
+        Ok(task)
     }
 
     pub fn update(&mut self, message: Message) -> Command<Message> {
@@ -348,12 +352,14 @@ impl Task {
                     .spacing(40)
                     .align_items(Align::Center);
                 let mut controls = Row::new()
-                    .spacing(60);
+                    .spacing(60)
+                    .align_items(Align::Center);
                 for (i, e) in elements.into_iter().enumerate() {
                     if i > 0 && i % 3 == 0 {
                         rows = rows.push(controls);
                         controls = Row::new()
-                            .spacing(60);
+                            .spacing(60)
+                            .align_items(Align::Center);
                     }
                     controls = controls.push(e);
                 }

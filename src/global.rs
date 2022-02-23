@@ -21,6 +21,8 @@ pub struct Global {
     font_scale: f32,
     #[serde(default="default::text_alignment")]
     text_alignment: String,
+    #[serde(default)]
+    debug_ui: bool,
     #[serde(skip)]
     root_dir: String,
     #[serde(skip)]
@@ -225,6 +227,10 @@ impl Global {
 
     pub fn dir(&self) -> &str {
         &self.root_dir
+    }
+
+    pub fn debug_ui(&self) -> bool {
+        self.debug_ui
     }
 
     pub fn set_config(&mut self, config: &Config) {
