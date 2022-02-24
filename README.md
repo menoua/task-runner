@@ -33,7 +33,7 @@ A task directory is a directory that contains a `task.yml` file and any addition
 
 * Linux-only: If during compilation you get an error saying failed to build `alsa-sys`, you need to get the ALSA development files. For example, on Ubuntu you can get them using: `sudo apt-get install libasound2-dev`.
 
-* Linux-only: If the binary fails to startup with the message `GraphicsAdapterNotFound`, you are missing the Vulkan library files. For example, on Ubuntu you can get them using: `sudo apt-get install libvulkan1`
+* Linux-only: If the binary fails to startup with the message `GraphicsAdapterNotFound`, the program cannot find a proper graphics adapter to use. This happens if trying to run the program on a virtual machine that doesn't have full access to the GPU, or are missing the Vulkan library files. For the second case, e.g., on Ubuntu you can get them using: `sudo apt-get install libvulkan1`
 
 * Windows-only: If during compilation you get an error saying `linker 'link.exe' not found`, you need to get the [Visual Studio C++ build tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/).
 
