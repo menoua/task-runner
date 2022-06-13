@@ -2,4 +2,4 @@ src-tauri/Cargo.lock
 src-tauri/target
 .idea
 .DS_Store
-/*.zip
+*.zip
