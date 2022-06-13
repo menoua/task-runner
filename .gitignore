@@ -1,10 +1,5 @@
-/target
-/examples/Trisyllabic
-/examples/*.zip
-output/
-Cargo.lock
+src-tauri/Cargo.lock
+src-tauri/target
 .idea
 .DS_Store
-neurotask.iml
 /*.zip
-*.mlapp

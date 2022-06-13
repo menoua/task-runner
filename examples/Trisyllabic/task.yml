@@ -1,0 +1,59 @@
+title: Trisyllabic
+version: 1.4
+description: < description.txt
+
+global:
+  window_size: 900 x 780
+  content_size: 700 x 640
+  resizable: true
+  font_scale: 1.0
+  text_alignment: center
+
+configuration:
+  audio: [ mono_and_trigger, false ]
+
+blocks:
+  - title: 1st Block
+    actions:
+      - type: instruction
+        prompt: Press the button every time you hear the word OBJECTIVE
+        timer: 3000
+      - type: audio
+        source: block1.wav
+        background: fixation-cross-small.png
+        monitor_kb: true
+      - type: question
+        list:
+          - type: multi_choice
+            prompt: Which of the following words were NOT spoken so far?
+            options: [ Salary, Limited, Governor ]
+
+  - title: 2nd Block
+    actions:
+      - type: instruction
+        prompt: Press the button every time you hear the word OBJECTIVE
+        timer: 3000
+      - type: audio
+        source: block2.wav
+        background: fixation-cross-small.png
+        monitor_kb: true
+      - type: question
+        list:
+          - type: multi_choice
+            prompt: Which of the following words were NOT spoken so far?
+            options: [ Visitor, Prominent, Relative ]
+
+  - title: 3rd Block
+    actions:
+      - type: instruction
+        prompt: Press the button every time you hear the word OBJECTIVE
+        timer: 3000
+      - type: audio
+        source: block3.wav
+        background: fixation-cross-small.png
+        monitor_kb: true
+      - type: question
+        list:
+          - type: multi_choice
+            prompt: Which of the following words were NOT spoken so far?
+            options: [ Pacific, Traveler, Reception ]
